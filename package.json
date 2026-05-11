@@ -1,0 +1,20 @@
+{
+  "name": "outlier-finder",
+  "version": "1.0.0",
+  "description": "Detecta videos virales en canales de YouTube y notifica por email",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "run-now": "node index.js --now"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.16.0",
+    "dotenv": "^17.4.2",
+    "node-cron": "^4.2.1",
+    "resend": "^6.12.3"
+  }
+}
