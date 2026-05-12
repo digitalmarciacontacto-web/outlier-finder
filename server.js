@@ -49,8 +49,37 @@ app.get('/', async (req, res) => {
         <a class="card-title" href="${v.url}" target="_blank">${v.title}</a>
         <div class="card-actions">
           <a class="btn-yt" href="${v.url}" target="_blank">▶ Ver video</a>
-          <button class="btn-gen" onclick="generateScript(${i})">✨ Generar guion</button>
+          <button class="btn-gen" id="btn-gen-${i}" onclick="startGenerate(${i})">✨ Generar guion</button>
         </div>
+
+        <!-- Selector tipo de contenido -->
+        <div class="format-selector" id="format-sel-${i}" style="display:none;">
+          <p class="sel-label">¿Qué tipo de contenido quieres generar?</p>
+          <div class="sel-buttons">
+            <button class="sel-btn" onclick="selectFormat(${i}, 'long')">
+              <span class="sel-icon">📹</span>
+              <span class="sel-title">Video largo YouTube</span>
+              <span class="sel-sub">8-12 min · Framework 7 hooks</span>
+            </button>
+            <button class="sel-btn" onclick="selectFormat(${i}, 'short')">
+              <span class="sel-icon">⚡</span>
+              <span class="sel-title">Short / Reel / TikTok</span>
+              <span class="sel-sub">60-90 seg · Hook + desarrollo + CTA</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector cantidad de shorts -->
+        <div class="qty-selector" id="qty-sel-${i}" style="display:none;">
+          <p class="sel-label">¿Cuántos shorts quieres generar?</p>
+          <div class="qty-buttons">
+            <button class="qty-btn" onclick="generateShorts(${i}, 1)">1</button>
+            <button class="qty-btn" onclick="generateShorts(${i}, 2)">2</button>
+            <button class="qty-btn" onclick="generateShorts(${i}, 3)">3</button>
+          </div>
+        </div>
+
+        <!-- Video largo -->
         <div class="script-box" id="script-${i}" style="display:none;">
           <div class="script-loading" id="loading-${i}" style="display:none;">
             <div class="spinner"></div><span>Generando guion con Claude...</span>
@@ -61,6 +90,15 @@ app.get('/', async (req, res) => {
             <button class="btn-teleprompter" onclick="openTeleprompter(${i})">📺 Abrir teleprompter</button>
           </div>
         </div>
+
+        <!-- Shorts -->
+        <div class="shorts-box" id="shorts-${i}" style="display:none;">
+          <div class="script-loading" id="shorts-loading-${i}" style="display:none;">
+            <div class="spinner"></div><span>Generando shorts con Claude...</span>
+          </div>
+          <div id="shorts-content-${i}"></div>
+        </div>
+
       </div>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -277,6 +315,117 @@ app.get('/', async (req, res) => {
     }
     .btn-teleprompter:hover { background: #312e81; }
 
+    /* ── Format / Quantity selectors ── */
+    .format-selector, .qty-selector {
+      margin-top: 16px;
+      padding: 16px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+    }
+    .sel-label {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .sel-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+    .sel-btn {
+      flex: 1;
+      min-width: 160px;
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s, background 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sel-btn:hover { border-color: #6366f1; background: #1e1b4b; }
+    .sel-icon { font-size: 22px; }
+    .sel-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .sel-sub { font-size: 12px; color: #64748b; }
+
+    .qty-buttons { display: flex; gap: 10px; }
+    .qty-btn {
+      width: 56px; height: 56px;
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 20px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .qty-btn:hover { border-color: #f59e0b; background: #1c1a0e; color: #fbbf24; }
+
+    /* ── Short cards ── */
+    .short-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+    .short-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .short-num {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      font-size: 12px;
+      font-weight: 900;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .short-filming {
+      font-size: 12px;
+      color: #64748b;
+      background: #1e293b;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .short-section {
+      margin-bottom: 12px;
+    }
+    .short-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f59e0b;
+      margin-bottom: 4px;
+    }
+    .short-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      font-family: 'Georgia', serif;
+    }
+    .short-copy-btn {
+      margin-top: 10px;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .short-copy-btn:hover { background: #334155; color: #e2e8f0; }
+
     /* ── Repurposer ── */
     .repurposer {
       margin-top: 48px;
@@ -433,7 +582,23 @@ app.get('/', async (req, res) => {
 <script>
   const videos = ${JSON.stringify(videos)};
 
-  // ── Script Generator ──────────────────────────────────────────────────────
+  // ── Format selection flow ─────────────────────────────────────────────────
+  function startGenerate(index) {
+    const btn = document.getElementById(\`btn-gen-\${index}\`);
+    btn.style.display = 'none';
+    document.getElementById(\`format-sel-\${index}\`).style.display = 'block';
+  }
+
+  function selectFormat(index, format) {
+    document.getElementById(\`format-sel-\${index}\`).style.display = 'none';
+    if (format === 'long') {
+      generateScript(index);
+    } else {
+      document.getElementById(\`qty-sel-\${index}\`).style.display = 'block';
+    }
+  }
+
+  // ── Long script generator ─────────────────────────────────────────────────
   async function generateScript(index) {
     const v = videos[index];
     const btn = document.querySelector(\`[data-index="\${index}"] .btn-gen\`);
@@ -514,6 +679,63 @@ app.get('/', async (req, res) => {
     const content = document.getElementById(\`content-\${index}\`);
     localStorage.setItem('teleprompter_script', content.textContent);
     window.open('/teleprompter', '_blank');
+  }
+
+  // ── Shorts generator ──────────────────────────────────────────────────────
+  async function generateShorts(index, qty) {
+    const v = videos[index];
+    document.getElementById(\`qty-sel-\${index}\`).style.display = 'none';
+
+    const box = document.getElementById(\`shorts-\${index}\`);
+    const loading = document.getElementById(\`shorts-loading-\${index}\`);
+    const contentEl = document.getElementById(\`shorts-content-\${index}\`);
+
+    box.style.display = 'block';
+    loading.style.display = 'flex';
+    contentEl.innerHTML = '';
+
+    try {
+      const res = await fetch('/generate-shorts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoTitle: v.title, channel: v.channel, score: v.score, url: v.url, quantity: qty }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al generar shorts');
+
+      loading.style.display = 'none';
+      contentEl.innerHTML = data.shorts.map((s, i) => \`
+        <div class="short-card">
+          <div class="short-card-header">
+            <span class="short-num">SHORT \${i + 1}</span>
+            <span class="short-filming">\${s.filming}</span>
+          </div>
+          <div class="short-section">
+            <div class="short-section-label">Hook — primeros 3 segundos</div>
+            <div class="short-text">\${s.hook}</div>
+          </div>
+          <div class="short-section">
+            <div class="short-section-label">Desarrollo</div>
+            <div class="short-text">\${s.body}</div>
+          </div>
+          <div class="short-section">
+            <div class="short-section-label">CTA</div>
+            <div class="short-text">\${s.cta}</div>
+          </div>
+          <button class="short-copy-btn" onclick="copyShort(this, \\\`\${s.hook}\\\\n\\\\n\${s.body}\\\\n\\\\n\${s.cta}\\\`)">📋 Copiar short \${i + 1}</button>
+        </div>
+      \`).join('');
+    } catch (err) {
+      loading.style.display = 'none';
+      contentEl.innerHTML = \`<p style="color:#f87171;padding:12px;">❌ \${err.message}</p>\`;
+    }
+  }
+
+  function copyShort(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✅ Copiado';
+      setTimeout(() => { btn.textContent = btn.textContent.replace('✅ Copiado', '📋 Copiar short'); }, 2000);
+    });
   }
 
   // ── Repurposer ────────────────────────────────────────────────────────────
@@ -854,6 +1076,65 @@ app.post('/run-now', async (req, res) => {
     await runAnalysis();
   } catch (err) {
     console.error('Error en /run-now:', err.message);
+  }
+});
+
+// ── POST /generate-shorts ─────────────────────────────────────────────────────
+app.post('/generate-shorts', async (req, res) => {
+  const { videoTitle, channel, score, url, quantity = 1 } = req.body;
+  if (!videoTitle || !channel) return res.status(400).json({ error: 'Faltan campos requeridos.' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+
+  const qty = Math.min(3, Math.max(1, parseInt(quantity, 10) || 1));
+
+  const prompt = `VIDEO OUTLIER DE REFERENCIA:
+Título: ${videoTitle}
+Canal: ${channel}
+Score: ${score}x el promedio del canal
+URL: ${url}
+
+Genera exactamente ${qty} short(s) independiente(s) para YouTube Shorts / Reels / TikTok, adaptando el tema a mi perspectiva y experiencia real.
+
+Cada short debe durar 60-90 segundos cuando se lea en voz alta.
+
+Para cada short incluye:
+- hook: los primeros 3 segundos exactos que detienen el scroll (frase de impacto, pregunta perturbadora, o afirmación contraintuitiva)
+- body: el desarrollo del contenido (60-75 seg), con un dato concreto o experiencia real, sin relleno
+- cta: llamada a acción final (5-10 seg), variada entre los shorts si hay más de uno
+- filming: indica UNA de estas opciones según el contenido: "Filmar in situ — exterior/calle" | "Filmar in situ — interior/habitación" | "A cámara directa — talking head"
+
+IMPORTANTE: Los shorts deben ser independientes entre sí. Cada uno cuenta algo completo.
+
+Responde ÚNICAMENTE con JSON válido, sin texto antes ni después:
+{
+  "shorts": [
+    {
+      "hook": "texto del hook",
+      "body": "texto del desarrollo",
+      "cta": "texto del cta",
+      "filming": "indicación de filmación"
+    }
+  ]
+}`;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 2048,
+      system: brandBlueprint,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const raw = message.content[0].text.trim();
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd = raw.lastIndexOf('}');
+    const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+    res.json(parsed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
