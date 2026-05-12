@@ -360,6 +360,21 @@ app.get('/', (req, res) => {
   res.send(html);
 });
 
+// ── POST /run-now ──────────────────────────────────────────────────────────────
+app.post('/run-now', async (req, res) => {
+  const secret = process.env.RUN_SECRET;
+  if (!secret || req.headers['x-secret'] !== secret) {
+    return res.status(401).json({ error: 'No autorizado.' });
+  }
+  res.json({ ok: true, message: 'Análisis iniciado en segundo plano.' });
+  try {
+    const { runAnalysis } = require('./analyzer');
+    await runAnalysis();
+  } catch (err) {
+    console.error('Error en /run-now:', err.message);
+  }
+});
+
 // ── POST /generate-script ──────────────────────────────────────────────────────
 app.post('/generate-script', async (req, res) => {
   const { videoTitle, channel, score, url } = req.body;
