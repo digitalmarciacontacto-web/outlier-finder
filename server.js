@@ -5,6 +5,8 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const { loadOutliersFromRedis } = require('./redis');
 
+const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
+
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
@@ -851,12 +853,7 @@ app.post('/generate-script', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `CONTEXTO DE MARCA:
-Soy Marcia, chilena, Ingeniera Comercial, nómada digital.
-Mi nicho: vida nómada real sin romantizar — costos reales, choques culturales, lo que nadie te cuenta. Mi voz: honesta, directa, conversacional, en primera persona, como con una amiga. Sin frases motivacionales vacías. Siempre anclado a experiencia real.
-He vivido en Dinamarca, Inglaterra, Lituania, Croacia, Francia, Grecia y Egipto. Próximo destino: Jordania o Marruecos.
-
-VIDEO OUTLIER A ADAPTAR:
+  const prompt = `VIDEO OUTLIER A ADAPTAR:
 Título: ${videoTitle}
 Canal: ${channel}
 Score: ${score}x el promedio del canal
@@ -883,8 +880,9 @@ El guion debe estar listo para leer como teleprompter.`;
   try {
     const client = new Anthropic({ apiKey });
     const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      system: brandBlueprint,
       messages: [{ role: 'user', content: prompt }],
     });
     for await (const chunk of stream) {
@@ -908,14 +906,12 @@ app.post('/generate-posts', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `Eres el asistente de contenido de Marcia, chilena, nómada digital, Ingeniera Comercial. Su voz: honesta, directa, conversacional, primera persona, como con una amiga. Sin frases motivacionales vacías. Sin emojis. Sin hashtags. Sin bullets con guiones. Siempre anclado a experiencia real.
-
-Basándote en este contenido:
+  const prompt = `Basándote en este contenido:
 ---
 ${content.slice(0, 4000)}
 ---
 
-Genera exactamente 6 posts para redes sociales. Cada uno debe tener:
+Genera exactamente 6 posts para redes sociales con mi voz. Cada uno debe tener:
 - Una versión para Threads (máximo 500 caracteres)
 - Una versión para X/Twitter (máximo 280 caracteres, más concisa y directa)
 
@@ -942,8 +938,9 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
+      system: brandBlueprint,
       messages: [{ role: 'user', content: prompt }],
     });
 
