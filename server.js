@@ -465,27 +465,39 @@ app.get('/', async (req, res) => {
       const decoder = new TextDecoder();
       loading.style.display = 'none';
       let full = '';
+      let streamError = null;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
+        const chunk = decoder.decode(value, { stream: true });
         for (const line of chunk.split('\\n')) {
-          if (line.startsWith('data: ')) {
-            try {
-              const json = JSON.parse(line.slice(6));
-              if (json.text) { full += json.text; content.textContent = full; content.scrollTop = content.scrollHeight; }
-            } catch {}
-          }
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const json = JSON.parse(payload);
+            if (json.error) { streamError = json.error; break; }
+            if (json.text) {
+              full += json.text;
+              content.textContent = full;
+              content.scrollTop = content.scrollHeight;
+            }
+          } catch {}
         }
+        if (streamError) break;
       }
+
+      if (streamError) throw new Error(streamError);
+      if (!full) throw new Error('El modelo no devolvió contenido.');
 
       actions.style.display = 'flex';
       btn.textContent = '✅ Guion generado';
-      // Pre-fill repurposer with this script
       document.getElementById('repurpose-input').value = full;
     } catch (err) {
       loading.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = '✨ Generar guion';
       content.textContent = '❌ Error: ' + err.message;
     }
   }
@@ -880,7 +892,7 @@ El guion debe estar listo para leer como teleprompter.`;
   try {
     const client = new Anthropic({ apiKey });
     const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       system: brandBlueprint,
       messages: [{ role: 'user', content: prompt }],
@@ -938,7 +950,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       system: brandBlueprint,
       messages: [{ role: 'user', content: prompt }],
