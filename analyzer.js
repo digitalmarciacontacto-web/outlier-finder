@@ -3,15 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const { analyzeChannel } = require('./youtube');
 const { sendOutlierEmail } = require('./email');
+const { saveOutliersToRedis } = require('./redis');
 const channels = require('./channels.json');
 
 const OUTLIER_THRESHOLD = 200;
 const OUTLIERS_FILE = path.join(__dirname, 'outliers.json');
 
-function saveOutliers(outliers) {
-  const date = new Date().toISOString().split('T')[0];
-  const data = {
-    date,
+function buildPayload(outliers) {
+  return {
+    date: new Date().toISOString().split('T')[0],
     videos: outliers.map(v => ({
       title: v.title,
       channel: v.channelName,
@@ -21,7 +21,6 @@ function saveOutliers(outliers) {
       url: v.url,
     })),
   };
-  fs.writeFileSync(OUTLIERS_FILE, JSON.stringify(data, null, 2));
 }
 
 async function runAnalysis() {
@@ -33,7 +32,6 @@ async function runAnalysis() {
   if (!apiKey || !resendKey || !emailTo) {
     throw new Error('Faltan variables de entorno: YOUTUBE_API_KEY, RESEND_API_KEY, EMAIL_TO');
   }
-
   if (!channels || channels.length === 0) {
     throw new Error('channels.json está vacío. Agrega al menos un canal.');
   }
@@ -56,7 +54,6 @@ async function runAnalysis() {
   }
 
   allOutliers.sort((a, b) => b.score - a.score);
-
   console.log(`\n🎯 Total outliers encontrados: ${allOutliers.length}`);
 
   if (allOutliers.length === 0) {
@@ -64,8 +61,17 @@ async function runAnalysis() {
     return;
   }
 
-  saveOutliers(allOutliers);
-  console.log(`💾 Guardado en outliers.json`);
+  const payload = buildPayload(allOutliers);
+
+  // Persist to Redis (primary) and local file (fallback/dev)
+  const savedToRedis = await saveOutliersToRedis(payload);
+  if (savedToRedis) {
+    console.log('💾 Guardado en Redis (Upstash)');
+  }
+  try {
+    fs.writeFileSync(OUTLIERS_FILE, JSON.stringify(payload, null, 2));
+    console.log('💾 Guardado en outliers.json (local)');
+  } catch {}
 
   console.log('\n📧 Enviando email...');
   await sendOutlierEmail(resendKey, emailTo, emailFrom, allOutliers);

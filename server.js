@@ -3,13 +3,21 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const { loadOutliersFromRedis } = require('./redis');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 const OUTLIERS_FILE = path.join(__dirname, 'outliers.json');
 
-function readOutliers() {
+async function readOutliers() {
+  // 1. Try Redis first
+  try {
+    const data = await loadOutliersFromRedis();
+    if (data) return data;
+  } catch {}
+
+  // 2. Fallback to local file
   if (!fs.existsSync(OUTLIERS_FILE)) return { date: null, videos: [] };
   try {
     return JSON.parse(fs.readFileSync(OUTLIERS_FILE, 'utf-8'));
@@ -19,8 +27,8 @@ function readOutliers() {
 }
 
 // ── GET / ─────────────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
-  const { date, videos } = readOutliers();
+app.get('/', async (req, res) => {
+  const { date, videos } = await readOutliers();
 
   const cards = videos.length === 0
     ? `<div class="empty">
