@@ -1089,23 +1089,23 @@ app.post('/generate-shorts', async (req, res) => {
 
   const qty = Math.min(3, Math.max(1, parseInt(quantity, 10) || 1));
 
-  const prompt = `VIDEO OUTLIER DE REFERENCIA:
-Título: ${videoTitle}
-Canal: ${channel}
-Score: ${score}x el promedio del canal
-URL: ${url}
+  const prompt = `Este video fue outlier en su canal: "${videoTitle}" — canal: ${channel} — ${score}x el promedio.
+Eso significa que ese TEMA o FORMATO conectó fuertemente con la audiencia.
 
-Genera exactamente ${qty} short(s) independiente(s) para YouTube Shorts / Reels / TikTok, adaptando el tema a mi perspectiva y experiencia real.
+Tu tarea NO es adaptar ese video ni resumirlo. Tu tarea es:
+1. Identificar QUÉ tema o formato hizo que ese video funcionara
+2. Encontrar en la historia real de Marcia y Tomi una experiencia equivalente o relacionada
+3. Generar ${qty} short(s) 100% original(es) basado(s) en ESA experiencia real de Marcia
 
-Cada short debe durar 60-90 segundos cuando se lea en voz alta.
+NUNCA menciones el video original ni al creador original. El contenido es 100% de Marcia, anclado a sus experiencias reales con Tomi.
+
+Cada short debe durar 60-90 segundos cuando se lea en voz alta y ser independiente de los demás.
 
 Para cada short incluye:
-- hook: los primeros 3 segundos exactos que detienen el scroll (frase de impacto, pregunta perturbadora, o afirmación contraintuitiva)
-- body: el desarrollo del contenido (60-75 seg), con un dato concreto o experiencia real, sin relleno
+- hook: los primeros 3 segundos exactos que detienen el scroll (frase de impacto, pregunta perturbadora, o afirmación contraintuitiva — basada en experiencia real)
+- body: desarrollo del contenido (60-75 seg) con dato concreto, costo real o experiencia específica de Marcia y Tomi, sin relleno
 - cta: llamada a acción final (5-10 seg), variada entre los shorts si hay más de uno
-- filming: indica UNA de estas opciones según el contenido: "Filmar in situ — exterior/calle" | "Filmar in situ — interior/habitación" | "A cámara directa — talking head"
-
-IMPORTANTE: Los shorts deben ser independientes entre sí. Cada uno cuenta algo completo.
+- filming: UNA de estas opciones según el contenido: "Filmar in situ — exterior/calle" | "Filmar in situ — interior/habitación" | "A cámara directa — talking head"
 
 Responde ÚNICAMENTE con JSON válido, sin texto antes ni después:
 {
@@ -1146,23 +1146,29 @@ app.post('/generate-script', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `VIDEO OUTLIER A ADAPTAR:
-Título: ${videoTitle}
-Canal: ${channel}
-Score: ${score}x el promedio del canal
-URL: ${url}
+  const prompt = `Este video fue outlier en su canal: "${videoTitle}" — canal: ${channel} — ${score}x el promedio.
+Eso significa que ese TEMA o FORMATO conectó fuertemente con la audiencia.
 
-Genera un guion completo para YouTube (8-12 minutos) adaptando el tema de ese video a MI perspectiva y experiencia real, usando este framework de 7 pasos:
+Tu tarea NO es adaptar ese video ni resumirlo. Tu tarea es:
+1. Identificar QUÉ tema o formato hizo que ese video funcionara (el insight real detrás del éxito)
+2. Encontrar en la historia real de Marcia y Tomi una experiencia equivalente o relacionada
+3. Generar un guion 100% original basado en ESA experiencia real de Marcia
+
+Por ejemplo: si el outlier es sobre un pueblo escondido en Inglaterra, el guion de Marcia podría ser sobre un lugar en Egipto, Grecia o Lituania que ella y Tomi descubrieron por casualidad — con los costos reales, la historia del lugar, y cómo llegaron ahí.
+
+NUNCA menciones el video original ni al creador original. El contenido es 100% de Marcia, anclado a sus experiencias reales con Tomi.
+
+Genera el guion completo para YouTube (8-12 minutos) usando este framework de 7 pasos:
 
 1. PATTERN INTERRUPTION (primeros 3 segundos): algo que rompa el patrón y detenga el scroll
-2. MIRROR TO VIEWER: hablarle directamente, que se vea reflejado
+2. MIRROR TO VIEWER: hablarle directamente a la audiencia, que se vea reflejada
 3. REVEAL THE OPPORTUNITY: mostrar qué van a aprender
 4. EXPOSE THE GAP/CURIOSITY: crear tensión o pregunta sin respuesta
 5. PROMISE THE TRANSFORMATION: qué van a poder hacer/saber al final
-6. AUTHORITY: quién soy yo para contarles esto (sin sonar arrogante)
+6. AUTHORITY: quién es Marcia para contarles esto (sin sonar arrogante)
 7. TRANSITION AL CONTENIDO: entrada natural al tema
 
-Después del hook, desarrolla el contenido completo del video con datos reales, experiencias concretas mías, y termina con un CTA: "Sígueme para más sobre vivir en [país] sin filtros".
+Después del hook, desarrolla el contenido completo con datos reales, costos concretos cuando aplique, y experiencias específicas de Marcia y Tomi. Termina con CTA: "Sígueme para más sobre vivir en [país] sin filtros".
 
 El guion debe estar listo para leer como teleprompter.`;
 
