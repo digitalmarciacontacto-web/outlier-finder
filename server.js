@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -563,6 +563,117 @@ app.get('/', async (req, res) => {
     }
     .btn-copy-post:hover { background: #334155; color: #e2e8f0; }
 
+    /* ── Modal canales ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #111827; border: 1px solid #1e293b; border-radius: 14px;
+      width: 100%; max-width: 520px; max-height: 90vh; display: flex;
+      flex-direction: column; overflow: hidden;
+    }
+    .modal-header {
+      padding: 20px 24px 16px; border-bottom: 1px solid #1e293b;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+    .modal-close { background: none; border: none; color: #4b5563; font-size: 20px; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: #e2e8f0; }
+    .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #1e293b; display: flex; gap: 10px; justify-content: flex-end; }
+
+    .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .search-row input {
+      flex: 1; background: #0f172a; border: 1px solid #374151; border-radius: 6px;
+      color: #e2e8f0; font-size: 14px; padding: 8px 12px; outline: none;
+      transition: border-color .2s;
+    }
+    .search-row input:focus { border-color: #6366f1; }
+    .search-row input::placeholder { color: #4b5563; }
+    .btn-search {
+      background: #4f46e5; color: #fff; border: none; padding: 8px 16px;
+      border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .btn-search:hover { opacity: .85; }
+    .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+
+    .channel-preview {
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
+      padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .channel-preview img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+    .channel-preview-info { flex: 1; }
+    .channel-preview-name { font-size: 14px; font-weight: 600; color: #e2e8f0; }
+    .channel-preview-id { font-size: 11px; color: #4b5563; margin-top: 2px; }
+    .btn-add-ch {
+      background: #064e3b; color: #6ee7b7; border: 1px solid #065f46;
+      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .btn-add-ch:hover { background: #065f46; }
+
+    .modal-section-label {
+      font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 10px;
+    }
+    .channel-list { display: flex; flex-direction: column; gap: 8px; }
+    .channel-item {
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
+      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .channel-item img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .channel-item-name { flex: 1; font-size: 13px; color: #cbd5e1; }
+    .channel-item-id { font-size: 11px; color: #4b5563; }
+    .btn-del {
+      background: none; border: none; color: #4b5563; cursor: pointer;
+      font-size: 16px; padding: 2px 4px; transition: color .2s; flex-shrink: 0;
+    }
+    .btn-del:hover { color: #f87171; }
+
+    .btn-save-channels {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff;
+      border: none; padding: 10px 22px; border-radius: 6px; font-size: 14px;
+      font-weight: 700; cursor: pointer; transition: opacity .2s;
+    }
+    .btn-save-channels:hover { opacity: .85; }
+    .btn-cancel-modal { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 10px 18px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    .btn-cancel-modal:hover { background: #374151; }
+
+    .search-error { font-size: 13px; color: #f87171; padding: 8px 0; }
+
+    .btn-manage-channels {
+      background: #1f2937; color: #94a3b8; border: 1px solid #374151;
+      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      cursor: pointer; margin-left: auto; transition: background .2s;
+    }
+    .btn-manage-channels:hover { background: #374151; color: #e2e8f0; }
+
+    .channel-modal {
+      background: #111; border: 1px solid #2a2a2a; border-radius: 14px;
+      width: 480px; max-width: 95vw; padding: 24px; color: #e2e8f0;
+    }
+    .ch-modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 18px;
+    }
+    .ch-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 8px; background: #1a1a1a;
+      margin-bottom: 6px; border: 1px solid #222;
+    }
+    .ch-item-info { display: flex; flex-direction: column; gap: 2px; }
+    .ch-item-name { font-size: 14px; font-weight: 500; }
+    .ch-item-id { font-size: 11px; color: #666; font-family: monospace; }
+    .ch-remove-btn {
+      background: none; border: none; color: #f87171; font-size: 16px;
+      cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1;
+    }
+    .ch-remove-btn:hover { background: #2a1a1a; }
+
     @media (max-width: 600px) {
       header, main { padding: 16px 20px; }
       .date-bar { padding: 10px 20px; }
@@ -588,7 +699,10 @@ app.get('/', async (req, res) => {
 </div>
 
 <main>
-  <div class="section-title">🚀 Outliers del día</div>
+  <div class="section-title" style="justify-content:space-between;align-items:center;">
+    <span>🚀 Outliers del día</span>
+    <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
+  </div>
   ${cards}
 
   <!-- ── MÓDULO E: Repurposer ── -->
@@ -838,7 +952,166 @@ app.get('/', async (req, res) => {
       setTimeout(() => { btn.textContent = 'Copiar'; }, 2000);
     });
   }
+
+  // ── CHANNEL MANAGER ──
+  let channelList = [];
+
+  async function openChannelModal() {
+    document.getElementById('channel-modal-overlay').style.display = 'flex';
+    document.getElementById('ch-search-input').value = '';
+    document.getElementById('ch-preview').style.display = 'none';
+    document.getElementById('ch-msg').textContent = '';
+    await loadCurrentChannels();
+  }
+
+  function closeChannelModal() {
+    document.getElementById('channel-modal-overlay').style.display = 'none';
+  }
+
+  async function loadCurrentChannels() {
+    try {
+      const res = await fetch('/channels');
+      const data = await res.json();
+      channelList = data.channels || [];
+      renderChannelList();
+    } catch {
+      document.getElementById('ch-msg').textContent = 'Error al cargar canales.';
+    }
+  }
+
+  function renderChannelList() {
+    const el = document.getElementById('ch-current-list');
+    if (channelList.length === 0) {
+      el.innerHTML = '<p style="color:#888;font-size:13px;">No hay canales guardados.</p>';
+      return;
+    }
+    el.innerHTML = channelList.map((c, i) => \`
+      <div class="ch-item">
+        <div class="ch-item-info">
+          <span class="ch-item-name">\${c.name || c.channelId || c.id}</span>
+          <span class="ch-item-id">\${c.channelId || c.id || ''}</span>
+        </div>
+        <button class="ch-remove-btn" onclick="removeChannel(\${i})">✕</button>
+      </div>
+    \`).join('');
+  }
+
+  async function searchChannel() {
+    const query = document.getElementById('ch-search-input').value.trim();
+    if (!query) return;
+    const btn = document.getElementById('ch-search-btn');
+    btn.textContent = 'Buscando...';
+    btn.disabled = true;
+    document.getElementById('ch-preview').style.display = 'none';
+    document.getElementById('ch-msg').textContent = '';
+    try {
+      const res = await fetch('/channels/search?q=' + encodeURIComponent(query));
+      const data = await res.json();
+      if (data.error) {
+        document.getElementById('ch-msg').textContent = data.error;
+      } else {
+        document.getElementById('ch-preview-name').textContent = data.name;
+        document.getElementById('ch-preview-id').textContent = data.channelId;
+        document.getElementById('ch-preview-subs').textContent = data.subscribers ? parseInt(data.subscribers).toLocaleString() + ' subs' : '';
+        document.getElementById('ch-preview').style.display = 'flex';
+        document.getElementById('ch-preview').dataset.channelId = data.channelId;
+        document.getElementById('ch-preview').dataset.channelName = data.name;
+      }
+    } catch {
+      document.getElementById('ch-msg').textContent = 'Error al buscar canal.';
+    }
+    btn.textContent = 'Buscar';
+    btn.disabled = false;
+  }
+
+  function addChannel() {
+    const preview = document.getElementById('ch-preview');
+    const channelId = preview.dataset.channelId;
+    const name = preview.dataset.channelName;
+    if (!channelId) return;
+    if (channelList.some(c => (c.channelId || c.id) === channelId)) {
+      document.getElementById('ch-msg').textContent = 'Este canal ya está en la lista.';
+      return;
+    }
+    channelList.push({ name, channelId });
+    renderChannelList();
+    preview.style.display = 'none';
+    document.getElementById('ch-search-input').value = '';
+    document.getElementById('ch-msg').textContent = '';
+  }
+
+  function removeChannel(i) {
+    channelList.splice(i, 1);
+    renderChannelList();
+  }
+
+  async function saveChannels() {
+    const btn = document.getElementById('ch-save-btn');
+    btn.textContent = 'Guardando...';
+    btn.disabled = true;
+    document.getElementById('ch-msg').textContent = '';
+    try {
+      const res = await fetch('/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels: channelList }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById('ch-msg').textContent = '✅ Canales guardados. El próximo análisis usará esta lista.';
+        document.getElementById('ch-msg').style.color = '#4ade80';
+      } else {
+        document.getElementById('ch-msg').textContent = data.error || 'Error al guardar.';
+        document.getElementById('ch-msg').style.color = '#f87171';
+      }
+    } catch {
+      document.getElementById('ch-msg').textContent = 'Error de red al guardar.';
+      document.getElementById('ch-msg').style.color = '#f87171';
+    }
+    btn.textContent = '💾 Guardar cambios';
+    btn.disabled = false;
+  }
+
+  document.getElementById('ch-search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchChannel();
+  });
 </script>
+
+<!-- CHANNEL MANAGER MODAL -->
+<div id="channel-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
+  <div class="channel-modal">
+    <div class="ch-modal-header">
+      <h2 style="margin:0;font-size:18px;">⚙️ Gestionar canales</h2>
+      <button onclick="closeChannelModal()" style="background:none;border:none;color:#aaa;font-size:22px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="ch-search-input" type="text" placeholder="@handle, nombre o URL del canal..." style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#fff;font-size:14px;"/>
+      <button id="ch-search-btn" onclick="searchChannel()" style="padding:9px 16px;border-radius:8px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:14px;white-space:nowrap;">Buscar</button>
+    </div>
+
+    <div id="ch-preview" style="display:none;align-items:center;justify-content:space-between;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;padding:10px 14px;margin-bottom:10px;">
+      <div>
+        <div id="ch-preview-name" style="font-weight:600;font-size:14px;"></div>
+        <div style="display:flex;gap:12px;margin-top:3px;">
+          <span id="ch-preview-id" style="font-size:11px;color:#888;font-family:monospace;"></span>
+          <span id="ch-preview-subs" style="font-size:11px;color:#6366f1;"></span>
+        </div>
+      </div>
+      <button onclick="addChannel()" style="padding:7px 14px;border-radius:6px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:13px;">+ Agregar</button>
+    </div>
+
+    <div style="font-size:13px;color:#aaa;margin-bottom:6px;">Canales actuales:</div>
+    <div id="ch-current-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px;"></div>
+
+    <div id="ch-msg" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button onclick="closeChannelModal()" style="padding:9px 18px;border-radius:8px;background:#2a2a2a;color:#aaa;border:1px solid #333;cursor:pointer;font-size:14px;">Cancelar</button>
+      <button id="ch-save-btn" onclick="saveChannels()" style="padding:9px 18px;border-radius:8px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:14px;">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>`;
@@ -1276,6 +1549,82 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
     const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
     trackUsage('posts', message.usage.input_tokens, message.usage.output_tokens).catch(() => {});
     res.json({ ...parsed, _cost: (message.usage.input_tokens / 1000 * 0.003 + message.usage.output_tokens / 1000 * 0.015).toFixed(4) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /channels ─────────────────────────────────────────────────────────────
+app.get('/channels', async (req, res) => {
+  try {
+    const fromRedis = await loadChannels();
+    if (fromRedis) return res.json(fromRedis);
+    const fromFile = JSON.parse(fs.readFileSync(path.join(__dirname, 'channels.json'), 'utf-8'));
+    res.json(fromFile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /channels ─────────────────────────────────────────────────────────────
+app.post('/channels', async (req, res) => {
+  const { channels } = req.body;
+  if (!Array.isArray(channels)) return res.status(400).json({ error: 'Se esperaba un array de canales.' });
+
+  try {
+    await saveChannels(channels);
+    // Also write to local file as backup
+    fs.writeFileSync(path.join(__dirname, 'channels.json'), JSON.stringify(channels, null, 2));
+    res.json({ ok: true, count: channels.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /channels/search ───────────────────────────────────────────────────────
+app.get('/channels/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Falta el parámetro q.' });
+
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'YOUTUBE_API_KEY no configurada.' });
+
+  // Parse handle from URL or @handle format
+  let handle = q;
+  const urlMatch = q.match(/youtube\.com\/@?([^/?&\s]+)/);
+  if (urlMatch) handle = urlMatch[1];
+  else handle = q.replace(/^@/, '');
+
+  try {
+    // Try forHandle first (works with @handles)
+    try {
+      const r = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+        params: { part: 'snippet', forHandle: handle, key: apiKey },
+      });
+      if (r.data.items?.length > 0) {
+        const ch = r.data.items[0];
+        return res.json({
+          channelId: ch.id,
+          name: ch.snippet.title,
+          thumbnail: ch.snippet.thumbnails?.default?.url || null,
+        });
+      }
+    } catch {}
+
+    // Fallback: search by query
+    const r2 = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: { part: 'snippet', q: handle, type: 'channel', maxResults: 1, key: apiKey },
+    });
+    if (r2.data.items?.length > 0) {
+      const ch = r2.data.items[0];
+      return res.json({
+        channelId: ch.snippet.channelId,
+        name: ch.snippet.channelTitle,
+        thumbnail: ch.snippet.thumbnails?.default?.url || null,
+      });
+    }
+
+    res.status(404).json({ error: 'Canal no encontrado. Verifica el handle o URL.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

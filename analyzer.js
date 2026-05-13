@@ -3,11 +3,19 @@ const fs = require('fs');
 const path = require('path');
 const { analyzeChannel } = require('./youtube');
 const { sendOutlierEmail } = require('./email');
-const { saveOutliersToRedis } = require('./redis');
-const channels = require('./channels.json');
+const { saveOutliersToRedis, loadChannels } = require('./redis');
 
 const OUTLIER_THRESHOLD = 200;
 const OUTLIERS_FILE = path.join(__dirname, 'outliers.json');
+const CHANNELS_FILE = path.join(__dirname, 'channels.json');
+
+async function getChannels() {
+  try {
+    const fromRedis = await loadChannels();
+    if (fromRedis && fromRedis.length > 0) return fromRedis;
+  } catch {}
+  return JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf-8'));
+}
 
 function buildPayload(outliers) {
   return {
@@ -32,6 +40,8 @@ async function runAnalysis() {
   if (!apiKey || !resendKey || !emailTo) {
     throw new Error('Faltan variables de entorno: YOUTUBE_API_KEY, RESEND_API_KEY, EMAIL_TO');
   }
+
+  const channels = await getChannels();
   if (!channels || channels.length === 0) {
     throw new Error('channels.json está vacío. Agrega al menos un canal.');
   }
@@ -63,11 +73,8 @@ async function runAnalysis() {
 
   const payload = buildPayload(allOutliers);
 
-  // Persist to Redis (primary) and local file (fallback/dev)
   const savedToRedis = await saveOutliersToRedis(payload);
-  if (savedToRedis) {
-    console.log('💾 Guardado en Redis (Upstash)');
-  }
+  if (savedToRedis) console.log('💾 Guardado en Redis (Upstash)');
   try {
     fs.writeFileSync(OUTLIERS_FILE, JSON.stringify(payload, null, 2));
     console.log('💾 Guardado en outliers.json (local)');

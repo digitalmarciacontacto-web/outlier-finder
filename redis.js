@@ -100,6 +100,21 @@ async function getDailyTotals(days = 7) {
   return result;
 }
 
+async function saveChannels(channels) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set('channels:config', JSON.stringify(channels));
+  return true;
+}
+
+async function loadChannels() {
+  const redis = getRedis();
+  if (!redis) return null;
+  const raw = await redis.get('channels:config');
+  if (!raw) return null;
+  return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
 module.exports = {
   saveOutliersToRedis,
   loadOutliersFromRedis,
@@ -107,4 +122,6 @@ module.exports = {
   getUsageSummary,
   getUsageHistory,
   getDailyTotals,
+  saveChannels,
+  loadChannels,
 };
