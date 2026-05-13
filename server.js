@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
-const { loadOutliersFromRedis } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -32,7 +32,7 @@ async function readOutliers() {
 
 // ── GET / ─────────────────────────────────────────────────────────────────────
 app.get('/', async (req, res) => {
-  const { date, videos } = await readOutliers();
+  const [{ date, videos }, usage] = await Promise.all([readOutliers(), getUsageSummary()]);
 
   const cards = videos.length === 0
     ? `<div class="empty">
@@ -62,11 +62,13 @@ app.get('/', async (req, res) => {
               <span class="sel-icon">📹</span>
               <span class="sel-title">Video largo YouTube</span>
               <span class="sel-sub">8-12 min · Framework 7 hooks</span>
+              <span class="cost-est">~$0.05</span>
             </button>
             <button class="sel-btn" onclick="selectFormat(${i}, 'short')">
               <span class="sel-icon">⚡</span>
               <span class="sel-title">Short / Reel / TikTok</span>
               <span class="sel-sub">60-90 seg · Hook + desarrollo + CTA</span>
+              <span class="cost-est">~$0.02 por short</span>
             </button>
           </div>
         </div>
@@ -137,6 +139,24 @@ app.get('/', async (req, res) => {
       letter-spacing: -0.5px;
     }
     header p { font-size: 13px; color: #64748b; margin-top: 2px; }
+
+    .usage-badge {
+      margin-left: auto;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    .usage-badge a { color: #818cf8; text-decoration: none; }
+    .usage-badge a:hover { text-decoration: underline; }
+    .cost-est {
+      font-size: 11px;
+      color: #4b5563;
+      margin-left: 6px;
+    }
 
     .date-bar {
       background: #111827;
@@ -556,6 +576,9 @@ app.get('/', async (req, res) => {
     <h1>Digital Marcia — Content Studio</h1>
     <p>Videos outlier detectados · Generador de guiones · Repurposer</p>
   </div>
+  <div class="usage-badge" id="usage-badge">
+    💰 Hoy: <strong>$${usage.today.toFixed(4)}</strong> &nbsp;|&nbsp; Total: <strong>$${usage.total.toFixed(4)}</strong> &nbsp;<a href="/usage">↗ historial</a>
+  </div>
 </header>
 
 <div class="date-bar">
@@ -649,6 +672,11 @@ app.get('/', async (req, res) => {
               full += json.text;
               content.textContent = full;
               content.scrollTop = content.scrollHeight;
+            }
+            if (json.done && json.cost) {
+              document.getElementById('usage-badge').innerHTML =
+                '💰 Actualizando... <a href="/usage">↗ historial</a>';
+              setTimeout(() => location.reload(), 1500);
             }
           } catch {}
         }
@@ -1131,7 +1159,8 @@ Responde ÚNICAMENTE con JSON válido, sin texto antes ni después:
     const jsonStart = raw.indexOf('{');
     const jsonEnd = raw.lastIndexOf('}');
     const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
-    res.json(parsed);
+    trackUsage('short', message.usage.input_tokens, message.usage.output_tokens).catch(() => {});
+    res.json({ ...parsed, _cost: (message.usage.input_tokens / 1000 * 0.003 + message.usage.output_tokens / 1000 * 0.015).toFixed(4) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1172,7 +1201,7 @@ El guion debe estar listo para leer como teleprompter.`;
 
   try {
     const client = new Anthropic({ apiKey });
-    const stream = await client.messages.stream({
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       system: systemPrompt,
@@ -1183,7 +1212,10 @@ El guion debe estar listo para leer como teleprompter.`;
         res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
       }
     }
-    res.write('data: [DONE]\n\n');
+    const final = await stream.finalMessage();
+    const costUsd = (final.usage.input_tokens / 1000 * 0.003 + final.usage.output_tokens / 1000 * 0.015).toFixed(4);
+    trackUsage('guion', final.usage.input_tokens, final.usage.output_tokens).catch(() => {});
+    res.write(`data: ${JSON.stringify({ done: true, cost: costUsd })}\n\n`);
     res.end();
   } catch (err) {
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
@@ -1241,11 +1273,108 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
     const jsonStart = raw.indexOf('{');
     const jsonEnd = raw.lastIndexOf('}');
     const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
-
-    res.json(parsed);
+    trackUsage('posts', message.usage.input_tokens, message.usage.output_tokens).catch(() => {});
+    res.json({ ...parsed, _cost: (message.usage.input_tokens / 1000 * 0.003 + message.usage.output_tokens / 1000 * 0.015).toFixed(4) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── GET /usage-summary ────────────────────────────────────────────────────────
+app.get('/usage-summary', async (req, res) => {
+  res.json(await getUsageSummary());
+});
+
+// ── GET /usage ────────────────────────────────────────────────────────────────
+app.get('/usage', async (req, res) => {
+  const [summary, history, daily] = await Promise.all([
+    getUsageSummary(),
+    getUsageHistory(50),
+    getDailyTotals(7),
+  ]);
+
+  const maxCost = Math.max(...daily.map(d => d.cost), 0.001);
+
+  const rows = history.map(e => `
+    <tr>
+      <td>${new Date(e.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</td>
+      <td><span class="type-badge type-${e.type}">${e.type}</span></td>
+      <td>${e.input_tokens.toLocaleString()}</td>
+      <td>${e.output_tokens.toLocaleString()}</td>
+      <td class="cost-cell">$${e.cost_usd.toFixed(4)}</td>
+    </tr>`).join('');
+
+  const bars = daily.map(d => `
+    <div class="bar-col">
+      <div class="bar-wrap">
+        <div class="bar" style="height:${Math.round((d.cost / maxCost) * 100)}%" title="$${d.cost.toFixed(4)}">
+          <span class="bar-val">$${d.cost.toFixed(3)}</span>
+        </div>
+      </div>
+      <div class="bar-label">${d.date.slice(5)}</div>
+    </div>`).join('');
+
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Uso API — Digital Marcia</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    header { background: linear-gradient(135deg,#1a1033,#0f172a); border-bottom: 1px solid #1e293b; padding: 20px 40px; display:flex; align-items:center; gap:16px; }
+    header h1 { font-size:20px; font-weight:800; background:linear-gradient(90deg,#a78bfa,#60a5fa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    header a { margin-left:auto; color:#818cf8; font-size:13px; text-decoration:none; }
+    header a:hover { text-decoration:underline; }
+    main { padding:32px 40px; max-width:900px; margin:0 auto; }
+    .summary { display:flex; gap:16px; margin-bottom:32px; flex-wrap:wrap; }
+    .stat { background:#111827; border:1px solid #1e293b; border-radius:10px; padding:20px 28px; flex:1; min-width:160px; }
+    .stat-label { font-size:12px; color:#4b5563; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+    .stat-value { font-size:28px; font-weight:900; color:#a78bfa; }
+    h2 { font-size:16px; font-weight:700; color:#e2e8f0; margin-bottom:16px; }
+    /* Chart */
+    .chart { display:flex; gap:8px; align-items:flex-end; height:120px; margin-bottom:32px; background:#111827; border:1px solid #1e293b; border-radius:10px; padding:16px; }
+    .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; }
+    .bar-wrap { flex:1; width:100%; display:flex; align-items:flex-end; }
+    .bar { width:100%; background:linear-gradient(180deg,#6366f1,#4f46e5); border-radius:4px 4px 0 0; position:relative; min-height:2px; transition:height .3s; }
+    .bar-val { position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:9px; color:#818cf8; white-space:nowrap; }
+    .bar-label { font-size:10px; color:#4b5563; margin-top:6px; }
+    /* Table */
+    table { width:100%; border-collapse:collapse; background:#111827; border:1px solid #1e293b; border-radius:10px; overflow:hidden; }
+    th { background:#1e293b; padding:10px 14px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; text-align:left; }
+    td { padding:10px 14px; font-size:13px; border-top:1px solid #1e293b; color:#cbd5e1; }
+    .cost-cell { font-weight:700; color:#a78bfa; }
+    .type-badge { padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+    .type-guion { background:#1e1b4b; color:#a5b4fc; }
+    .type-short { background:#064e3b; color:#6ee7b7; }
+    .type-posts { background:#1c1917; color:#d6d3d1; }
+  </style>
+</head>
+<body>
+<header>
+  <div style="font-size:24px">📊</div>
+  <h1>Uso de API — Content Studio</h1>
+  <a href="/">← Volver</a>
+</header>
+<main>
+  <div class="summary">
+    <div class="stat"><div class="stat-label">Gastado hoy</div><div class="stat-value">$${summary.today.toFixed(4)}</div></div>
+    <div class="stat"><div class="stat-label">Total acumulado</div><div class="stat-value">$${summary.total.toFixed(4)}</div></div>
+    <div class="stat"><div class="stat-label">Últimas generaciones</div><div class="stat-value">${history.length}</div></div>
+  </div>
+
+  <h2>Gasto últimos 7 días</h2>
+  <div class="chart">${bars}</div>
+
+  <h2>Historial de uso</h2>
+  ${history.length === 0
+    ? '<p style="color:#4b5563;padding:20px">Sin datos aún.</p>'
+    : `<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Input tokens</th><th>Output tokens</th><th>Costo</th></tr></thead><tbody>${rows}</tbody></table>`
+  }
+</main>
+</body>
+</html>`);
 });
 
 function startServer() {
