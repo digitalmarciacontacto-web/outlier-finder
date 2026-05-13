@@ -3,6 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const axios = require('axios');
 const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
@@ -1280,6 +1281,57 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
   }
 });
 
+// ── GET /anthropic-usage ──────────────────────────────────────────────────────
+app.get('/anthropic-usage', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const endDate = now.toISOString().split('T')[0];
+
+  try {
+    const response = await axios.get('https://api.anthropic.com/v1/usage', {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      params: { start_date: startDate, end_date: endDate },
+    });
+
+    const data = response.data;
+    let totalInput = 0;
+    let totalOutput = 0;
+
+    const entries = data.data || data.usage || [];
+    entries.forEach(entry => {
+      totalInput += entry.input_tokens || 0;
+      totalOutput += entry.output_tokens || 0;
+    });
+
+    const costUsd = (totalInput / 1000 * 0.003) + (totalOutput / 1000 * 0.015);
+
+    res.json({
+      ok: true,
+      period: { start: startDate, end: endDate },
+      total_input_tokens: totalInput,
+      total_output_tokens: totalOutput,
+      cost_usd: Math.round(costUsd * 10000) / 10000,
+      raw: entries,
+    });
+  } catch (err) {
+    const status = err.response?.status;
+    if (status === 403 || status === 404) {
+      return res.json({
+        ok: false,
+        status,
+        message: 'La API de Anthropic no permite consultar usage externamente — usa console.anthropic.com',
+      });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /usage-summary ────────────────────────────────────────────────────────
 app.get('/usage-summary', async (req, res) => {
   res.json(await getUsageSummary());
@@ -1349,6 +1401,18 @@ app.get('/usage', async (req, res) => {
     .type-guion { background:#1e1b4b; color:#a5b4fc; }
     .type-short { background:#064e3b; color:#6ee7b7; }
     .type-posts { background:#1c1917; color:#d6d3d1; }
+    /* Anthropic section */
+    .api-section { background:#111827; border:1px solid #1e293b; border-radius:10px; padding:20px 24px; margin-bottom:32px; }
+    .api-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .api-section-header h2 { margin:0; }
+    .btn-refresh { background:#1e293b; color:#818cf8; border:1px solid #334155; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:background .2s; }
+    .btn-refresh:hover { background:#334155; }
+    .api-stats { display:flex; gap:12px; flex-wrap:wrap; }
+    .api-stat { background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:14px 20px; flex:1; min-width:130px; }
+    .api-stat-label { font-size:11px; color:#4b5563; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+    .api-stat-value { font-size:20px; font-weight:800; color:#60a5fa; }
+    .api-notice { font-size:13px; color:#f87171; background:#1c0a0a; border:1px solid #7f1d1d; border-radius:8px; padding:12px 16px; }
+    .api-loading { color:#4b5563; font-size:13px; }
   </style>
 </head>
 <body>
@@ -1358,6 +1422,16 @@ app.get('/usage', async (req, res) => {
   <a href="/">← Volver</a>
 </header>
 <main>
+
+  <!-- Uso real Anthropic -->
+  <div class="api-section">
+    <div class="api-section-header">
+      <h2>Uso real — Anthropic API</h2>
+      <button class="btn-refresh" onclick="loadAnthropicUsage()">↻ Actualizar</button>
+    </div>
+    <div id="anthropic-usage-content"><p class="api-loading">Consultando API de Anthropic...</p></div>
+  </div>
+
   <div class="summary">
     <div class="stat"><div class="stat-label">Gastado hoy</div><div class="stat-value">$${summary.today.toFixed(4)}</div></div>
     <div class="stat"><div class="stat-label">Total acumulado</div><div class="stat-value">$${summary.total.toFixed(4)}</div></div>
@@ -1373,6 +1447,44 @@ app.get('/usage', async (req, res) => {
     : `<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Input tokens</th><th>Output tokens</th><th>Costo</th></tr></thead><tbody>${rows}</tbody></table>`
   }
 </main>
+<script>
+  async function loadAnthropicUsage() {
+    const container = document.getElementById('anthropic-usage-content');
+    container.innerHTML = '<p class="api-loading">Consultando API de Anthropic...</p>';
+    try {
+      const res = await fetch('/anthropic-usage');
+      const data = await res.json();
+
+      if (!data.ok) {
+        container.innerHTML = \`<p class="api-notice">⚠️ \${data.message || data.error}</p>\`;
+        return;
+      }
+
+      container.innerHTML = \`
+        <p style="font-size:12px;color:#4b5563;margin-bottom:12px;">
+          Período: \${data.period.start} → \${data.period.end}
+        </p>
+        <div class="api-stats">
+          <div class="api-stat">
+            <div class="api-stat-label">Input tokens</div>
+            <div class="api-stat-value">\${data.total_input_tokens.toLocaleString()}</div>
+          </div>
+          <div class="api-stat">
+            <div class="api-stat-label">Output tokens</div>
+            <div class="api-stat-value">\${data.total_output_tokens.toLocaleString()}</div>
+          </div>
+          <div class="api-stat">
+            <div class="api-stat-label">Costo estimado</div>
+            <div class="api-stat-value" style="color:#a78bfa;">$\${data.cost_usd.toFixed(4)}</div>
+          </div>
+        </div>\`;
+    } catch (err) {
+      container.innerHTML = \`<p class="api-notice">❌ Error al consultar: \${err.message}</p>\`;
+    }
+  }
+
+  loadAnthropicUsage();
+</script>
 </body>
 </html>`);
 });
