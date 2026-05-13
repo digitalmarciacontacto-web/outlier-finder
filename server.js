@@ -1558,9 +1558,9 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
 app.get('/channels', async (req, res) => {
   try {
     const fromRedis = await loadChannels();
-    if (fromRedis) return res.json(fromRedis);
+    if (fromRedis) return res.json({ channels: fromRedis });
     const fromFile = JSON.parse(fs.readFileSync(path.join(__dirname, 'channels.json'), 'utf-8'));
-    res.json(fromFile);
+    res.json({ channels: fromFile });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
