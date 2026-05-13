@@ -6,6 +6,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { loadOutliersFromRedis } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
+const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
+const systemPrompt = `${brandBlueprint}\n\nBANCO DE HISTORIAS REALES:\n${storiesBank}`;
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -1089,15 +1091,12 @@ app.post('/generate-shorts', async (req, res) => {
 
   const qty = Math.min(3, Math.max(1, parseInt(quantity, 10) || 1));
 
-  const prompt = `Este video fue outlier en su canal: "${videoTitle}" — canal: ${channel} — ${score}x el promedio.
-Eso significa que ese TEMA o FORMATO conectó fuertemente con la audiencia.
-
-Tu tarea NO es adaptar ese video ni resumirlo. Tu tarea es:
-1. Identificar QUÉ tema o formato hizo que ese video funcionara
-2. Encontrar en la historia real de Marcia y Tomi una experiencia equivalente o relacionada
-3. Generar ${qty} short(s) 100% original(es) basado(s) en ESA experiencia real de Marcia
-
-NUNCA menciones el video original ni al creador original. El contenido es 100% de Marcia, anclado a sus experiencias reales con Tomi.
+  const prompt = `Este video fue outlier: "${videoTitle}" — ${score}x el promedio del canal.
+Identifica QUÉ tema o formato hizo que ese video funcionara.
+Encuentra en el banco de historias reales de Marcia una experiencia equivalente o relacionada.
+Genera ${qty} short(s) 100% original(es) basado(s) en ESA experiencia real.
+NUNCA menciones el video original ni al creador original.
+Si no hay historia real que encaje exactamente, usa el marcador [MARCIA: insertar experiencia real aquí] en ese punto.
 
 Cada short debe durar 60-90 segundos cuando se lea en voz alta y ser independiente de los demás.
 
@@ -1124,7 +1123,7 @@ Responde ÚNICAMENTE con JSON válido, sin texto antes ni después:
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 2048,
-      system: brandBlueprint,
+      system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -1146,17 +1145,12 @@ app.post('/generate-script', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `Este video fue outlier en su canal: "${videoTitle}" — canal: ${channel} — ${score}x el promedio.
-Eso significa que ese TEMA o FORMATO conectó fuertemente con la audiencia.
-
-Tu tarea NO es adaptar ese video ni resumirlo. Tu tarea es:
-1. Identificar QUÉ tema o formato hizo que ese video funcionara (el insight real detrás del éxito)
-2. Encontrar en la historia real de Marcia y Tomi una experiencia equivalente o relacionada
-3. Generar un guion 100% original basado en ESA experiencia real de Marcia
-
-Por ejemplo: si el outlier es sobre un pueblo escondido en Inglaterra, el guion de Marcia podría ser sobre un lugar en Egipto, Grecia o Lituania que ella y Tomi descubrieron por casualidad — con los costos reales, la historia del lugar, y cómo llegaron ahí.
-
-NUNCA menciones el video original ni al creador original. El contenido es 100% de Marcia, anclado a sus experiencias reales con Tomi.
+  const prompt = `Este video fue outlier: "${videoTitle}" — ${score}x el promedio del canal.
+Identifica QUÉ tema o formato hizo que ese video funcionara.
+Encuentra en el banco de historias reales de Marcia una experiencia equivalente o relacionada.
+Genera contenido 100% original basado en ESA experiencia real.
+NUNCA menciones el video original ni al creador original.
+Si no hay historia real que encaje exactamente, usa el marcador [MARCIA: insertar experiencia real aquí] en ese punto.
 
 Genera el guion completo para YouTube (8-12 minutos) usando este framework de 7 pasos:
 
@@ -1181,7 +1175,7 @@ El guion debe estar listo para leer como teleprompter.`;
     const stream = await client.messages.stream({
       model: 'claude-sonnet-4-5',
       max_tokens: 4000,
-      system: brandBlueprint,
+      system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     });
     for await (const chunk of stream) {
@@ -1239,7 +1233,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 2048,
-      system: brandBlueprint,
+      system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     });
 

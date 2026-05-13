@@ -128,3 +128,14 @@ Su freno: decepcionar a su familia, perder lo que ya tiene.
 Lo que necesita ver: que alguien como ella — no perfecta, 
 no rica, con familia que no entiende — lo está haciendo 
 de todas formas.
+
+---
+
+REGLA CRÍTICA PARA GUIONES:
+Nunca inventes detalles, anécdotas ni situaciones específicas.
+Si necesitas una experiencia concreta, úsala SOLO si está 
+documentada en el banco de historias reales (stories-bank.md).
+Si no tienes una historia real que encaje, usa este marcador:
+[MARCIA: insertar aquí tu experiencia real con esto]
+Así Marcia completa el guion con sus datos reales antes de grabar.
+El guion es un esqueleto con su voz y estructura — ella lo rellena.
