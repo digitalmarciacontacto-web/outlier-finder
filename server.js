@@ -76,6 +76,15 @@ app.get('/', async (req, res) => {
       </div>
     </div>`;
 
+  function catBadgeClass(cat) {
+    const map = { 'destino': 'cat-destino', 'finanzas': 'cat-finanzas', 'reinvención': 'cat-reinvencion', 'trabajo-remoto': 'cat-trabajo-remoto', 'lado-b': 'cat-lado-b', 'logistica': 'cat-logistica' };
+    return map[cat] || 'cat-unknown';
+  }
+  function catLabel(cat) {
+    const map = { 'destino': '🌍 Destino', 'finanzas': '💰 Finanzas', 'reinvención': '🔄 Reinvención', 'trabajo-remoto': '📱 Trabajo Remoto', 'lado-b': '😬 Lado B', 'logistica': '✈️ Logística' };
+    return map[cat] || cat || '—';
+  }
+
   const outlierCards = videos.length === 0
     ? `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:#4b5563;">No hay outliers aún.</div>`
     : videos.map((v, i) => {
@@ -83,12 +92,15 @@ app.get('/', async (req, res) => {
       const thumb = v.thumbnail
         ? `<img src="${v.thumbnail}" alt="" loading="lazy"/>`
         : `<div class="thumb-placeholder">▶</div>`;
+      const catClass = catBadgeClass(v.category);
+      const catText = catLabel(v.category);
       return `
-      <div class="o-card" id="o-card-${i}" data-score="${v.score}" onclick="toggleCard(${i})">
+      <div class="o-card" id="o-card-${i}" data-score="${v.score}" data-category="${v.category || ''}" data-published="${v.publishedAt || ''}" onclick="toggleCard(${i})">
         <div class="o-thumb">${thumb}<span class="o-score-badge ${sc}">${v.score}x</span></div>
         <div class="o-body">
-          <div class="o-channel">${v.channel}</div>
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;"><span class="cat-badge ${catClass}">${catText}</span></div>
           <div class="o-title">${v.title}</div>
+          <div class="o-channel-small">${v.channel}</div>
           <div class="o-meta">👁 ${(v.views/1000).toFixed(1)}K · ${timeAgo(v.publishedAt)}</div>
           <div class="o-actions" onclick="event.stopPropagation()">
             <a class="btn-yt" href="${v.url}" target="_blank">▶ Ver</a>
@@ -350,6 +362,23 @@ app.get('/', async (req, res) => {
     .btn-save-channels { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
     .btn-save-channels:hover { opacity: .85; }
 
+    /* ── Category badges ── */
+    .cat-badge { display: inline-block; padding: 2px 9px; border-radius: 5px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+    .cat-destino      { background: #052e16; color: #4ade80; border: 1px solid #065f46; }
+    .cat-finanzas     { background: #1c1a0e; color: #fbbf24; border: 1px solid #854d0e; }
+    .cat-reinvencion  { background: #1e1b4b; color: #a78bfa; border: 1px solid #4c1d95; }
+    .cat-trabajo-remoto { background: #0c1a2e; color: #60a5fa; border: 1px solid #1e3a5f; }
+    .cat-lado-b       { background: #2d0f0f; color: #f87171; border: 1px solid #7f1d1d; }
+    .cat-logistica    { background: #0a1e1e; color: #2dd4bf; border: 1px solid #134e4a; }
+    .cat-unknown      { background: #1a1a1a; color: #6b7280; border: 1px solid #2a2a2a; }
+    .o-channel-small { font-size: 10px; color: #4b5563; margin-top: 2px; }
+    /* date filter row */
+    .filter-date-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-date-label { font-size: 11px; color: #4b5563; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+    .filter-date-pill { background: #1a1a1a; border: 1px solid #2a2a2a; color: #6b7280; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .filter-date-pill:hover { border-color: #6366f1; color: #a78bfa; }
+    .filter-date-pill.active { background: #0f172a; border-color: #38bdf8; color: #38bdf8; }
+
     /* ── MI CANAL ── */
     .canal-platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
     .platform-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
@@ -470,10 +499,20 @@ app.get('/', async (req, res) => {
     <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
   </div>
   <div class="filter-row">
-    <button class="filter-pill active" onclick="setFilter('all',this)">Todos</button>
-    <button class="filter-pill" onclick="setFilter('viral',this)">🔥 500x+ Viral</button>
-    <button class="filter-pill" onclick="setFilter('strong',this)">💪 200x+ Fuerte</button>
-    <button class="filter-pill" onclick="setFilter('normal',this)">📉 Menor 200x</button>
+    <button class="filter-pill active" data-topic="all" onclick="setTopic('all',this)">Todos</button>
+    <button class="filter-pill" data-topic="destino" onclick="setTopic('destino',this)">🌍 Destino</button>
+    <button class="filter-pill" data-topic="finanzas" onclick="setTopic('finanzas',this)">💰 Finanzas</button>
+    <button class="filter-pill" data-topic="reinvención" onclick="setTopic('reinvención',this)">🔄 Reinvención</button>
+    <button class="filter-pill" data-topic="trabajo-remoto" onclick="setTopic('trabajo-remoto',this)">📱 Trabajo Remoto</button>
+    <button class="filter-pill" data-topic="lado-b" onclick="setTopic('lado-b',this)">😬 Lado B</button>
+    <button class="filter-pill" data-topic="logistica" onclick="setTopic('logistica',this)">✈️ Logística</button>
+  </div>
+  <div class="filter-date-row">
+    <span class="filter-date-label">Fecha:</span>
+    <button class="filter-date-pill active" data-days="0" onclick="setDate(0,this)">Todos</button>
+    <button class="filter-date-pill" data-days="7" onclick="setDate(7,this)">7 días</button>
+    <button class="filter-date-pill" data-days="30" onclick="setDate(30,this)">1 mes</button>
+    <button class="filter-date-pill" data-days="365" onclick="setDate(365,this)">1 año</button>
   </div>
   <div class="outliers-grid" id="outliers-grid">
     ${outlierCards}
@@ -671,15 +710,40 @@ app.get('/', async (req, res) => {
     if (el) el.textContent = (d.channels || []).length;
   }).catch(() => {});
 
-  // ── Filters ─────────────────────────────────────────────────────────────────
-  function setFilter(type, btn) {
+  // ── Filters (topic + date, combined) ────────────────────────────────────────
+  let _activeTopic = 'all';
+  let _activeDays  = 0;
+
+  function applyFilters() {
+    const now = Date.now();
+    document.querySelectorAll('.o-card').forEach(card => {
+      const topic = card.dataset.category || '';
+      const pub   = card.dataset.published;
+
+      const topicOk = _activeTopic === 'all' || topic === _activeTopic;
+
+      let dateOk = true;
+      if (_activeDays > 0 && pub) {
+        const age = (now - new Date(pub)) / 86400000;
+        dateOk = age <= _activeDays;
+      }
+
+      card.style.display = topicOk && dateOk ? '' : 'none';
+    });
+  }
+
+  function setTopic(topic, btn) {
+    _activeTopic = topic;
     document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.o-card').forEach(card => {
-      const s = parseInt(card.dataset.score, 10);
-      const show = type === 'all' || (type === 'viral' && s >= 500) || (type === 'strong' && s >= 200 && s < 500) || (type === 'normal' && s < 200);
-      card.style.display = show ? '' : 'none';
-    });
+    applyFilters();
+  }
+
+  function setDate(days, btn) {
+    _activeDays = days;
+    document.querySelectorAll('.filter-date-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilters();
   }
 
   // ── Card expansion + lazy pattern analysis ──────────────────────────────────

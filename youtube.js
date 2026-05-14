@@ -75,6 +75,7 @@ async function analyzeChannel(apiKey, channelId, channelName) {
     const score = Math.round((views / average) * 100);
     return {
       title: video.snippet.title,
+      description: (video.snippet.description || '').slice(0, 400),
       videoId: video.id,
       url: `https://www.youtube.com/watch?v=${video.id}`,
       channelName,
