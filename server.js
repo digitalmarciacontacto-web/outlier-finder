@@ -33,78 +33,119 @@ async function readOutliers() {
 
 // ── GET / ─────────────────────────────────────────────────────────────────────
 app.get('/', async (req, res) => {
-  const [{ date, videos }, usage] = await Promise.all([readOutliers(), getUsageSummary()]);
+  const [{ date, videos }, usage, history] = await Promise.all([
+    readOutliers(), getUsageSummary(), getUsageHistory(100),
+  ]);
 
-  const cards = videos.length === 0
-    ? `<div class="empty">
-        <p>No hay datos aún.</p>
-        <p>Ejecuta <code>npm run run-now</code> para generar el primer análisis.</p>
-       </div>`
-    : videos.map((v, i) => `
-      <div class="card" data-index="${i}">
-        <div class="card-top">
-          <div class="score-badge">${v.score}<span>x</span></div>
-          <div class="card-meta">
-            <div class="card-channel">${v.channel}</div>
-            <div class="card-views">👁 ${(v.views / 1000).toFixed(1)}K vistas · promedio ${(v.channelAvg / 1000).toFixed(1)}K</div>
+  const todayStr = new Date().toISOString().split('T')[0];
+  const generationsToday = history.filter(h => h.date && h.date.startsWith(todayStr)).length;
+  const topScore = videos.length > 0 ? videos[0].score : 0;
+
+  function scoreClass(s) { return s >= 500 ? 'viral' : s >= 200 ? 'strong' : 'normal'; }
+  function scoreBadgeClass(s) { return s >= 500 ? 'score-viral' : s >= 200 ? 'score-strong' : 'score-normal'; }
+  function timeAgo(pub) {
+    if (!pub) return '';
+    const d = Math.floor((Date.now() - new Date(pub)) / 86400000);
+    if (d === 0) return 'Hoy';
+    if (d === 1) return 'Ayer';
+    if (d < 7) return `Hace ${d} días`;
+    if (d < 30) return `Hace ${Math.floor(d/7)} sem.`;
+    if (d < 365) return `Hace ${Math.floor(d/30)} mes.`;
+    return `Hace ${Math.floor(d/365)} año(s)`;
+  }
+
+  const topVideo = videos[0];
+  const featuredCardHtml = !topVideo ? `
+    <div class="empty-state">
+      <p>No hay datos aún. Ejecuta el análisis para ver los outliers del día.</p>
+    </div>` : `
+    <div class="featured-card">
+      <div class="featured-thumbnail">
+        ${topVideo.thumbnail
+          ? `<img src="${topVideo.thumbnail}" alt="" loading="lazy"/>`
+          : `<div class="thumb-placeholder">▶</div>`}
+      </div>
+      <div class="featured-body">
+        <div class="featured-score ${scoreClass(topVideo.score)}">${topVideo.score}<span>x</span></div>
+        <div class="featured-title">${topVideo.title}</div>
+        <div class="featured-meta"><strong>${topVideo.channel}</strong> · ${(topVideo.views/1000).toFixed(1)}K vistas · promedio ${(topVideo.channelAvg/1000).toFixed(1)}K</div>
+        <div class="featured-actions">
+          <a class="btn-yt" href="${topVideo.url}" target="_blank">▶ Ver video</a>
+          <button class="btn-gen" onclick="showSection('outliers');setTimeout(()=>toggleCard(0),100)">✨ Generar guion</button>
+        </div>
+      </div>
+    </div>`;
+
+  const outlierCards = videos.length === 0
+    ? `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:#4b5563;">No hay outliers aún.</div>`
+    : videos.map((v, i) => {
+      const sc = scoreBadgeClass(v.score);
+      const thumb = v.thumbnail
+        ? `<img src="${v.thumbnail}" alt="" loading="lazy"/>`
+        : `<div class="thumb-placeholder">▶</div>`;
+      return `
+      <div class="o-card" id="o-card-${i}" data-score="${v.score}" onclick="toggleCard(${i})">
+        <div class="o-thumb">${thumb}<span class="o-score-badge ${sc}">${v.score}x</span></div>
+        <div class="o-body">
+          <div class="o-channel">${v.channel}</div>
+          <div class="o-title">${v.title}</div>
+          <div class="o-meta">👁 ${(v.views/1000).toFixed(1)}K · ${timeAgo(v.publishedAt)}</div>
+          <div class="o-actions" onclick="event.stopPropagation()">
+            <a class="btn-yt" href="${v.url}" target="_blank">▶ Ver</a>
+            <button class="btn-gen" id="gen-btn-${i}" onclick="startGenerate(${i},event)">✨ Generar guion</button>
           </div>
         </div>
-        <a class="card-title" href="${v.url}" target="_blank">${v.title}</a>
-        <div class="card-actions">
-          <a class="btn-yt" href="${v.url}" target="_blank">▶ Ver video</a>
-          <button class="btn-gen" id="btn-gen-${i}" onclick="startGenerate(${i})">✨ Generar guion</button>
-        </div>
-
-        <!-- Selector tipo de contenido -->
-        <div class="format-selector" id="format-sel-${i}" style="display:none;">
-          <p class="sel-label">¿Qué tipo de contenido quieres generar?</p>
-          <div class="sel-buttons">
-            <button class="sel-btn" onclick="selectFormat(${i}, 'long')">
-              <span class="sel-icon">📹</span>
-              <span class="sel-title">Video largo YouTube</span>
-              <span class="sel-sub">8-12 min · Framework 7 hooks</span>
-              <span class="cost-est">~$0.05</span>
-            </button>
-            <button class="sel-btn" onclick="selectFormat(${i}, 'short')">
-              <span class="sel-icon">⚡</span>
-              <span class="sel-title">Short / Reel / TikTok</span>
-              <span class="sel-sub">60-90 seg · Hook + desarrollo + CTA</span>
-              <span class="cost-est">~$0.02 por short</span>
-            </button>
+        <div class="o-expand" id="expand-${i}">
+          <div class="o-expand-inner">
+            <div class="pattern-loading" id="pattern-loading-${i}" style="display:none;">
+              <div class="spinner"></div><span>Analizando patrón con Claude...</span>
+            </div>
+            <div id="pattern-${i}"></div>
+            <div class="format-selector" id="format-sel-${i}" style="display:none;">
+              <div class="sel-label">¿Qué tipo de contenido?</div>
+              <div class="sel-buttons">
+                <button class="sel-btn" onclick="selectFormat(${i},'long',event)">
+                  <span class="sel-icon">📹</span>
+                  <span class="sel-title">Video largo YouTube</span>
+                  <span class="sel-sub">8-12 min · Framework 7 hooks</span>
+                  <span class="cost-est">~$0.05</span>
+                </button>
+                <button class="sel-btn" onclick="selectFormat(${i},'short',event)">
+                  <span class="sel-icon">⚡</span>
+                  <span class="sel-title">Short / Reel / TikTok</span>
+                  <span class="sel-sub">60-90 seg · Hook + CTA</span>
+                  <span class="cost-est">~$0.02 por short</span>
+                </button>
+              </div>
+            </div>
+            <div class="qty-selector" id="qty-sel-${i}" style="display:none;">
+              <div class="sel-label">¿Cuántos shorts?</div>
+              <div class="qty-buttons">
+                <button class="qty-btn" onclick="generateShorts(${i},1,event)">1</button>
+                <button class="qty-btn" onclick="generateShorts(${i},2,event)">2</button>
+                <button class="qty-btn" onclick="generateShorts(${i},3,event)">3</button>
+              </div>
+            </div>
+            <div class="script-box" id="script-${i}" style="display:none;">
+              <div class="script-loading" id="loading-${i}" style="display:none;">
+                <div class="spinner"></div><span>Generando guion con Claude...</span>
+              </div>
+              <div class="script-content" id="content-${i}"></div>
+              <div class="script-actions" id="script-actions-${i}" style="display:none;">
+                <button class="btn-copy" onclick="copyScript(${i})">📋 Copiar guion</button>
+                <button class="btn-teleprompter" onclick="openTeleprompter(${i})">📺 Teleprompter</button>
+              </div>
+            </div>
+            <div class="shorts-box" id="shorts-${i}" style="display:none;">
+              <div class="script-loading" id="shorts-loading-${i}" style="display:none;">
+                <div class="spinner"></div><span>Generando shorts con Claude...</span>
+              </div>
+              <div id="shorts-content-${i}"></div>
+            </div>
           </div>
         </div>
-
-        <!-- Selector cantidad de shorts -->
-        <div class="qty-selector" id="qty-sel-${i}" style="display:none;">
-          <p class="sel-label">¿Cuántos shorts quieres generar?</p>
-          <div class="qty-buttons">
-            <button class="qty-btn" onclick="generateShorts(${i}, 1)">1</button>
-            <button class="qty-btn" onclick="generateShorts(${i}, 2)">2</button>
-            <button class="qty-btn" onclick="generateShorts(${i}, 3)">3</button>
-          </div>
-        </div>
-
-        <!-- Video largo -->
-        <div class="script-box" id="script-${i}" style="display:none;">
-          <div class="script-loading" id="loading-${i}" style="display:none;">
-            <div class="spinner"></div><span>Generando guion con Claude...</span>
-          </div>
-          <div class="script-content" id="content-${i}"></div>
-          <div class="script-actions" id="script-actions-${i}" style="display:none;">
-            <button class="btn-copy" onclick="copyScript(${i})">📋 Copiar guion</button>
-            <button class="btn-teleprompter" onclick="openTeleprompter(${i})">📺 Abrir teleprompter</button>
-          </div>
-        </div>
-
-        <!-- Shorts -->
-        <div class="shorts-box" id="shorts-${i}" style="display:none;">
-          <div class="script-loading" id="shorts-loading-${i}" style="display:none;">
-            <div class="spinner"></div><span>Generando shorts con Claude...</span>
-          </div>
-          <div id="shorts-content-${i}"></div>
-        </div>
-
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -114,740 +155,499 @@ app.get('/', async (req, res) => {
   <title>Digital Marcia — Content Studio</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f0f0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
 
-    body {
-      background: #0a0a0f;
-      color: #e2e8f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      min-height: 100vh;
-    }
+    /* ── Header ── */
+    #app-header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #111; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; padding: 0 32px; height: 56px; gap: 0; }
+    .header-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-right: 24px; }
+    .header-logo { font-size: 20px; }
+    .header-title { font-size: 15px; font-weight: 700; background: linear-gradient(90deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; }
+    .header-nav { display: flex; gap: 2px; }
+    .nav-tab { background: none; border: none; color: #6b7280; font-size: 14px; font-weight: 500; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+    .nav-tab:hover { color: #e2e8f0; background: #1f1f1f; }
+    .nav-tab.active { color: #a78bfa; background: #1e1b4b; font-weight: 700; }
+    .header-cost { margin-left: auto; font-size: 13px; color: #6b7280; white-space: nowrap; background: #1a1a1a; border: 1px solid #2a2a2a; padding: 5px 12px; border-radius: 6px; }
+    .header-cost strong { color: #a78bfa; }
 
-    header {
-      background: linear-gradient(135deg, #1a1033 0%, #0f172a 100%);
-      border-bottom: 1px solid #1e293b;
-      padding: 20px 40px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    header .logo { font-size: 28px; }
-    header h1 {
-      font-size: 22px;
-      font-weight: 800;
-      background: linear-gradient(90deg, #a78bfa, #60a5fa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.5px;
-    }
-    header p { font-size: 13px; color: #64748b; margin-top: 2px; }
+    /* ── Layout ── */
+    #app-body { margin-top: 56px; min-height: calc(100vh - 56px); }
+    .section { display: none; padding: 32px; max-width: 1100px; margin: 0 auto; }
+    .section.active { display: block; }
 
-    .usage-badge {
-      margin-left: auto;
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 6px 14px;
-      font-size: 12px;
-      color: #94a3b8;
-      white-space: nowrap;
-    }
-    .usage-badge a { color: #818cf8; text-decoration: none; }
-    .usage-badge a:hover { text-decoration: underline; }
-    .cost-est {
-      font-size: 11px;
-      color: #4b5563;
-      margin-left: 6px;
-    }
+    /* ── HOY ── */
+    .hoy-date { font-size: 13px; color: #6b7280; margin-bottom: 24px; }
+    .hoy-date span { color: #a78bfa; font-weight: 600; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .metric-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; }
+    .metric-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-bottom: 8px; }
+    .metric-value { font-size: 36px; font-weight: 800; color: #e2e8f0; line-height: 1; }
+    .metric-value.viral { color: #ef4444; }
+    .metric-value.strong { color: #f97316; }
+    .featured-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 12px; }
+    .featured-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 16px; overflow: hidden; display: flex; margin-bottom: 24px; }
+    .featured-thumbnail { width: 280px; flex-shrink: 0; background: #111; overflow: hidden; }
+    .featured-thumbnail img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .featured-body { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+    .featured-score { display: inline-flex; align-items: center; gap: 6px; background: #ef4444; color: #fff; font-size: 24px; font-weight: 900; padding: 6px 14px; border-radius: 8px; width: fit-content; line-height: 1; }
+    .featured-score span { font-size: 14px; opacity: .8; }
+    .featured-score.strong { background: #f97316; }
+    .featured-score.normal { background: #6b7280; }
+    .featured-title { font-size: 20px; font-weight: 700; color: #e2e8f0; line-height: 1.4; }
+    .featured-meta { font-size: 13px; color: #6b7280; }
+    .featured-meta strong { color: #a78bfa; }
+    .featured-actions { display: flex; gap: 10px; margin-top: auto; flex-wrap: wrap; }
+    .btn-see-all { display: inline-flex; align-items: center; gap: 6px; background: #1a1a1a; border: 1px solid #2a2a2a; color: #a78bfa; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s; }
+    .btn-see-all:hover { background: #1e1b4b; border-color: #4f46e5; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #4b5563; font-size: 14px; }
 
-    .date-bar {
-      background: #111827;
-      padding: 10px 40px;
-      font-size: 13px;
-      color: #4b5563;
-      border-bottom: 1px solid #1e293b;
-    }
-    .date-bar span { color: #818cf8; font-weight: 600; }
-
-    main { padding: 32px 40px; max-width: 900px; margin: 0 auto; }
-
-    .section-title {
-      font-size: 18px;
-      font-weight: 700;
-      color: #e2e8f0;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #1e293b;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .empty { text-align: center; padding: 80px 20px; color: #4b5563; }
-    .empty code {
-      background: #1e293b;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 14px;
-      color: #94a3b8;
-    }
-
-    /* ── Cards ── */
-    .card {
-      background: #111827;
-      border: 1px solid #1e293b;
-      border-radius: 12px;
-      padding: 20px 24px;
-      margin-bottom: 16px;
-      transition: border-color 0.2s;
-    }
-    .card:hover { border-color: #312e81; }
-
-    .card-top { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-
-    .score-badge {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      color: #fff;
-      font-size: 32px;
-      font-weight: 900;
-      padding: 8px 14px;
-      border-radius: 10px;
-      line-height: 1;
-      min-width: 70px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-    .score-badge span { font-size: 16px; opacity: 0.8; }
-
-    .card-channel {
-      font-size: 13px;
-      color: #818cf8;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-    .card-views { font-size: 13px; color: #4b5563; }
-
-    .card-title {
-      display: block;
-      font-size: 16px;
-      font-weight: 600;
-      color: #e2e8f0;
-      text-decoration: none;
-      line-height: 1.5;
-      margin-bottom: 16px;
-    }
-    .card-title:hover { color: #a78bfa; }
-
-    .card-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    /* ── OUTLIERS ── */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .section-title { font-size: 20px; font-weight: 800; color: #e2e8f0; }
+    .filter-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .filter-pill { background: #1a1a1a; border: 1px solid #2a2a2a; color: #6b7280; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .filter-pill:hover { border-color: #6366f1; color: #a78bfa; }
+    .filter-pill.active { background: #1e1b4b; border-color: #6366f1; color: #a78bfa; }
+    .outliers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .o-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .2s; }
+    .o-card:hover { border-color: #4f46e5; }
+    .o-card.expanded { border-color: #6366f1; }
+    .o-thumb { width: 100%; aspect-ratio: 16/9; background: #111; overflow: hidden; position: relative; }
+    .o-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #2a2a2a; }
+    .o-score-badge { position: absolute; top: 8px; left: 8px; font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 6px; color: #fff; }
+    .score-viral { background: #ef4444; }
+    .score-strong { background: #f97316; }
+    .score-normal { background: #6b7280; }
+    .o-body { padding: 14px 16px; }
+    .o-channel { font-size: 11px; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .o-title { font-size: 14px; font-weight: 600; color: #e2e8f0; line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .o-meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+    .o-actions { display: flex; gap: 8px; }
+    .o-expand { display: none; padding: 0 16px 16px; border-top: 1px solid #2a2a2a; }
+    .o-card.expanded .o-expand { display: block; }
+    .o-expand-inner { padding-top: 14px; }
+    .pattern-loading { display: flex; align-items: center; gap: 10px; color: #6366f1; font-size: 13px; padding: 8px 0; }
+    .pattern-result { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .pattern-item { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px 14px; }
+    .pattern-item-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6366f1; margin-bottom: 4px; }
+    .pattern-item-value { font-size: 13px; color: #cbd5e1; line-height: 1.5; }
 
     /* ── Buttons ── */
-    .btn-yt {
-      background: #1f2937;
-      color: #e2e8f0;
-      border: 1px solid #374151;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      text-decoration: none;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
+    .btn-yt { background: #1f2937; color: #e2e8f0; border: 1px solid #374151; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; transition: background .2s; display: inline-flex; align-items: center; gap: 4px; }
     .btn-yt:hover { background: #374151; }
-
-    .btn-gen {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      color: #fff;
-      border: none;
-      padding: 8px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .btn-gen:hover { opacity: 0.85; }
-    .btn-gen:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .script-box {
-      margin-top: 20px;
-      border-top: 1px solid #1e293b;
-      padding-top: 20px;
-    }
-    .script-loading {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: #818cf8;
-      font-size: 14px;
-      padding: 16px 0;
-    }
-    .spinner {
-      width: 20px; height: 20px;
-      border: 2px solid #312e81;
-      border-top-color: #818cf8;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .script-content {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 24px;
-      font-size: 14px;
-      line-height: 1.8;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      font-family: 'Georgia', serif;
-      max-height: 600px;
-      overflow-y: auto;
-    }
-    .script-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-    .btn-copy {
-      background: #064e3b;
-      color: #6ee7b7;
-      border: 1px solid #065f46;
-      padding: 8px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-copy:hover { background: #065f46; }
-
-    .btn-teleprompter {
-      background: #1e1b4b;
-      color: #a5b4fc;
-      border: 1px solid #312e81;
-      padding: 8px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-teleprompter:hover { background: #312e81; }
-
-    /* ── Format / Quantity selectors ── */
-    .format-selector, .qty-selector {
-      margin-top: 16px;
-      padding: 16px;
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 10px;
-    }
-    .sel-label {
-      font-size: 13px;
-      color: #64748b;
-      margin-bottom: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .sel-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
-    .sel-btn {
-      flex: 1;
-      min-width: 160px;
-      background: #1e293b;
-      border: 2px solid #334155;
-      border-radius: 10px;
-      padding: 14px 16px;
-      cursor: pointer;
-      text-align: left;
-      transition: border-color 0.2s, background 0.2s;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .sel-btn:hover { border-color: #6366f1; background: #1e1b4b; }
-    .sel-icon { font-size: 22px; }
-    .sel-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
-    .sel-sub { font-size: 12px; color: #64748b; }
-
-    .qty-buttons { display: flex; gap: 10px; }
-    .qty-btn {
-      width: 56px; height: 56px;
-      background: #1e293b;
-      border: 2px solid #334155;
-      border-radius: 10px;
-      color: #e2e8f0;
-      font-size: 20px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .qty-btn:hover { border-color: #f59e0b; background: #1c1a0e; color: #fbbf24; }
-
-    /* ── Short cards ── */
-    .short-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 14px;
-    }
-    .short-card-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .short-num {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #000;
-      font-size: 12px;
-      font-weight: 900;
-      padding: 3px 10px;
-      border-radius: 99px;
-    }
-    .short-filming {
-      font-size: 12px;
-      color: #64748b;
-      background: #1e293b;
-      padding: 3px 10px;
-      border-radius: 99px;
-    }
-    .short-section {
-      margin-bottom: 12px;
-    }
-    .short-section-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #f59e0b;
-      margin-bottom: 4px;
-    }
-    .short-text {
-      font-size: 14px;
-      line-height: 1.7;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      font-family: 'Georgia', serif;
-    }
-    .short-copy-btn {
-      margin-top: 10px;
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .short-copy-btn:hover { background: #334155; color: #e2e8f0; }
-
-    /* ── Repurposer ── */
-    .repurposer {
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 2px solid #1e293b;
-    }
-
-    .repurposer textarea {
-      width: 100%;
-      background: #111827;
-      border: 1px solid #374151;
-      border-radius: 8px;
-      color: #e2e8f0;
-      font-size: 14px;
-      line-height: 1.6;
-      padding: 16px;
-      resize: vertical;
-      min-height: 140px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .repurposer textarea:focus { border-color: #6366f1; }
-    .repurposer textarea::placeholder { color: #4b5563; }
-
-    .btn-repurpose {
-      margin-top: 12px;
-      background: linear-gradient(135deg, #0f766e, #0891b2);
-      color: #fff;
-      border: none;
-      padding: 10px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .btn-repurpose:hover { opacity: 0.85; }
-    .btn-repurpose:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .posts-loading {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      color: #22d3ee;
-      font-size: 14px;
-      padding: 16px 0;
-    }
-
-    .posts-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 24px;
-    }
-    @media (max-width: 700px) { .posts-grid { grid-template-columns: 1fr; } }
-
-    .post-card {
-      background: #111827;
-      border: 1px solid #1e293b;
-      border-radius: 10px;
-      padding: 18px;
-    }
-    .post-card-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #6366f1;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-    }
-    .post-versions { display: flex; flex-direction: column; gap: 12px; }
-
-    .post-version {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      padding: 12px;
-    }
-    .post-platform {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 6px;
-    }
-    .post-platform.threads { color: #a78bfa; }
-    .post-platform.x { color: #38bdf8; }
-
-    .post-text {
-      font-size: 13px;
-      line-height: 1.6;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      margin-bottom: 8px;
-    }
-    .post-chars {
-      font-size: 11px;
-      color: #4b5563;
-      margin-bottom: 6px;
-    }
-    .btn-copy-post {
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      padding: 4px 12px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-copy-post:hover { background: #334155; color: #e2e8f0; }
-
-    /* ── Modal canales ── */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-      z-index: 1000; align-items: center; justify-content: center;
-    }
-    .modal-overlay.open { display: flex; }
-    .modal {
-      background: #111827; border: 1px solid #1e293b; border-radius: 14px;
-      width: 100%; max-width: 520px; max-height: 90vh; display: flex;
-      flex-direction: column; overflow: hidden;
-    }
-    .modal-header {
-      padding: 20px 24px 16px; border-bottom: 1px solid #1e293b;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .modal-header h3 { font-size: 16px; font-weight: 700; color: #e2e8f0; }
-    .modal-close { background: none; border: none; color: #4b5563; font-size: 20px; cursor: pointer; line-height: 1; }
-    .modal-close:hover { color: #e2e8f0; }
-    .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
-    .modal-footer { padding: 16px 24px; border-top: 1px solid #1e293b; display: flex; gap: 10px; justify-content: flex-end; }
-
-    .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
-    .search-row input {
-      flex: 1; background: #0f172a; border: 1px solid #374151; border-radius: 6px;
-      color: #e2e8f0; font-size: 14px; padding: 8px 12px; outline: none;
-      transition: border-color .2s;
-    }
-    .search-row input:focus { border-color: #6366f1; }
-    .search-row input::placeholder { color: #4b5563; }
-    .btn-search {
-      background: #4f46e5; color: #fff; border: none; padding: 8px 16px;
-      border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
-    }
-    .btn-search:hover { opacity: .85; }
-    .btn-search:disabled { opacity: .5; cursor: not-allowed; }
-
-    .channel-preview {
-      background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
-      padding: 12px 16px; display: flex; align-items: center; gap: 12px;
-      margin-bottom: 12px;
-    }
-    .channel-preview img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-    .channel-preview-info { flex: 1; }
-    .channel-preview-name { font-size: 14px; font-weight: 600; color: #e2e8f0; }
-    .channel-preview-id { font-size: 11px; color: #4b5563; margin-top: 2px; }
-    .btn-add-ch {
-      background: #064e3b; color: #6ee7b7; border: 1px solid #065f46;
-      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
-      cursor: pointer; white-space: nowrap;
-    }
-    .btn-add-ch:hover { background: #065f46; }
-
-    .modal-section-label {
-      font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;
-      letter-spacing: .05em; margin-bottom: 10px;
-    }
-    .channel-list { display: flex; flex-direction: column; gap: 8px; }
-    .channel-item {
-      background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
-      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
-    }
-    .channel-item img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .channel-item-name { flex: 1; font-size: 13px; color: #cbd5e1; }
-    .channel-item-id { font-size: 11px; color: #4b5563; }
-    .btn-del {
-      background: none; border: none; color: #4b5563; cursor: pointer;
-      font-size: 16px; padding: 2px 4px; transition: color .2s; flex-shrink: 0;
-    }
-    .btn-del:hover { color: #f87171; }
-
-    .btn-save-channels {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff;
-      border: none; padding: 10px 22px; border-radius: 6px; font-size: 14px;
-      font-weight: 700; cursor: pointer; transition: opacity .2s;
-    }
-    .btn-save-channels:hover { opacity: .85; }
-    .btn-cancel-modal { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 10px 18px; border-radius: 6px; font-size: 14px; cursor: pointer; }
-    .btn-cancel-modal:hover { background: #374151; }
-
-    .search-error { font-size: 13px; color: #f87171; padding: 8px 0; }
-
-    .btn-manage-channels {
-      background: #1f2937; color: #94a3b8; border: 1px solid #374151;
-      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
-      cursor: pointer; margin-left: auto; transition: background .2s;
-    }
+    .btn-gen { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity .2s; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-gen:hover { opacity: .85; }
+    .btn-gen:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-manage-channels { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s; }
     .btn-manage-channels:hover { background: #374151; color: #e2e8f0; }
 
-    .channel-modal {
-      background: #111; border: 1px solid #2a2a2a; border-radius: 14px;
-      width: 480px; max-width: 95vw; padding: 24px; color: #e2e8f0;
-    }
-    .ch-modal-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 18px;
-    }
-    .ch-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 10px; border-radius: 8px; background: #1a1a1a;
-      margin-bottom: 6px; border: 1px solid #222;
-    }
-    .ch-item-info { display: flex; flex-direction: column; gap: 2px; }
-    .ch-item-name { font-size: 14px; font-weight: 500; }
-    .ch-item-id { font-size: 11px; color: #666; font-family: monospace; }
-    .ch-remove-btn {
-      background: none; border: none; color: #f87171; font-size: 16px;
-      cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1;
-    }
-    .ch-remove-btn:hover { background: #2a1a1a; }
+    /* ── Format/Qty selectors ── */
+    .format-selector, .qty-selector { margin-top: 12px; padding: 14px; background: #111; border: 1px solid #2a2a2a; border-radius: 10px; }
+    .sel-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+    .sel-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    .sel-btn { flex: 1; min-width: 130px; background: #1a1a1a; border: 2px solid #2a2a2a; border-radius: 8px; padding: 12px; cursor: pointer; text-align: left; transition: border-color .2s, background .2s; display: flex; flex-direction: column; gap: 3px; }
+    .sel-btn:hover { border-color: #6366f1; background: #1e1b4b; }
+    .sel-icon { font-size: 18px; }
+    .sel-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+    .sel-sub { font-size: 11px; color: #6b7280; }
+    .cost-est { font-size: 10px; color: #4b5563; margin-top: 2px; }
+    .qty-buttons { display: flex; gap: 10px; }
+    .qty-btn { width: 48px; height: 48px; background: #1a1a1a; border: 2px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 18px; font-weight: 800; cursor: pointer; transition: border-color .2s, background .2s; }
+    .qty-btn:hover { border-color: #f59e0b; background: #1c1a0e; color: #fbbf24; }
 
+    /* ── Script/spinner ── */
+    .script-box { margin-top: 12px; }
+    .script-loading { display: flex; align-items: center; gap: 10px; color: #818cf8; font-size: 13px; padding: 12px 0; }
+    .spinner { width: 18px; height: 18px; border: 2px solid #312e81; border-top-color: #818cf8; border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .script-content { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.8; color: #cbd5e1; white-space: pre-wrap; font-family: 'Georgia', serif; max-height: 500px; overflow-y: auto; }
+    .script-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .btn-copy { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .btn-copy:hover { background: #065f46; }
+    .btn-teleprompter { background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .btn-teleprompter:hover { background: #312e81; }
+
+    /* ── Shorts ── */
+    .short-card { background: #111; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .short-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .short-num { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-size: 11px; font-weight: 900; padding: 3px 10px; border-radius: 99px; }
+    .short-filming { font-size: 11px; color: #6b7280; background: #1a1a1a; padding: 3px 10px; border-radius: 99px; }
+    .short-section { margin-bottom: 10px; }
+    .short-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #f59e0b; margin-bottom: 4px; }
+    .short-text { font-size: 13px; line-height: 1.7; color: #cbd5e1; white-space: pre-wrap; font-family: 'Georgia', serif; }
+    .short-copy-btn { background: #1a1a1a; color: #94a3b8; border: 1px solid #2a2a2a; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .short-copy-btn:hover { background: #2a2a2a; color: #e2e8f0; }
+
+    /* ── Repurposer ── */
+    .repurposer-desc { color: #6b7280; font-size: 14px; margin-bottom: 16px; }
+    .repurposer-textarea { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 14px; line-height: 1.6; padding: 16px; resize: vertical; min-height: 140px; font-family: inherit; outline: none; transition: border-color .2s; }
+    .repurposer-textarea:focus { border-color: #6366f1; }
+    .repurposer-textarea::placeholder { color: #4b5563; }
+    .btn-repurpose { margin-top: 12px; background: linear-gradient(135deg, #0f766e, #0891b2); color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
+    .btn-repurpose:hover { opacity: .85; }
+    .btn-repurpose:disabled { opacity: .5; cursor: not-allowed; }
+    .posts-loading { display: none; align-items: center; gap: 12px; color: #22d3ee; font-size: 14px; padding: 16px 0; }
+    .posts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+    .post-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px; }
+    .post-card-label { font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+    .post-versions { display: flex; flex-direction: column; gap: 10px; }
+    .post-version { background: #111; border: 1px solid #2a2a2a; border-radius: 6px; padding: 12px; }
+    .post-platform { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+    .post-platform.threads { color: #a78bfa; }
+    .post-platform.x { color: #38bdf8; }
+    .post-text { font-size: 13px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; margin-bottom: 8px; }
+    .post-chars { font-size: 11px; color: #4b5563; margin-bottom: 6px; }
+    .btn-copy-post { background: #1a1a1a; color: #94a3b8; border: 1px solid #2a2a2a; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-copy-post:hover { background: #2a2a2a; color: #e2e8f0; }
+
+    /* ── USO ── */
+    .uso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+    .uso-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; }
+    .uso-card-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-bottom: 8px; }
+    .uso-card-value { font-size: 36px; font-weight: 800; color: #a78bfa; }
+    .uso-section-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 12px; margin-top: 28px; }
+    .uso-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .uso-table th { text-align: left; color: #4b5563; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px; border-bottom: 1px solid #2a2a2a; }
+    .uso-table td { padding: 10px 12px; border-bottom: 1px solid #1f1f1f; color: #cbd5e1; }
+    .uso-table tr:last-child td { border-bottom: none; }
+    .uso-table tbody tr:hover td { background: #1f1f1f; }
+    .type-badge-uso { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .type-guion { background: #1e1b4b; color: #a78bfa; }
+    .type-short { background: #1c1a0e; color: #fbbf24; }
+    .type-posts { background: #0a1628; color: #38bdf8; }
+
+    /* ── Channel modal ── */
+    #channel-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; }
+    .channel-modal { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; width: 480px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+    .ch-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #2a2a2a; }
+    .ch-modal-header h2 { font-size: 16px; font-weight: 700; }
+    .ch-modal-close { background: none; border: none; color: #6b7280; font-size: 20px; cursor: pointer; line-height: 1; }
+    .ch-modal-close:hover { color: #e2e8f0; }
+    .ch-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+    .ch-modal-footer { padding: 16px 24px; border-top: 1px solid #2a2a2a; display: flex; gap: 10px; justify-content: flex-end; }
+    .ch-search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ch-search-row input { flex: 1; background: #111; border: 1px solid #2a2a2a; border-radius: 6px; color: #e2e8f0; font-size: 14px; padding: 8px 12px; outline: none; transition: border-color .2s; }
+    .ch-search-row input:focus { border-color: #6366f1; }
+    .ch-search-row input::placeholder { color: #4b5563; }
+    .ch-preview { background: #111; border: 1px solid #6366f1; border-radius: 8px; padding: 10px 14px; display: none; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .ch-preview-name { font-size: 14px; font-weight: 600; }
+    .ch-preview-id { font-size: 11px; color: #6b7280; font-family: monospace; }
+    .ch-section-label { font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .ch-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .ch-item { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; }
+    .ch-item-name { flex: 1; font-size: 13px; color: #cbd5e1; }
+    .ch-item-id { font-size: 11px; color: #4b5563; font-family: monospace; }
+    .ch-remove-btn { background: none; border: none; color: #4b5563; font-size: 16px; cursor: pointer; padding: 2px 4px; transition: color .2s; }
+    .ch-remove-btn:hover { color: #ef4444; }
+    .ch-msg { font-size: 13px; min-height: 18px; margin-top: 10px; }
+    .btn-search { background: #4f46e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn-search:hover { opacity: .85; }
+    .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-add-ch { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .btn-add-ch:hover { background: #065f46; }
+    .btn-cancel-modal { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 9px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .btn-cancel-modal:hover { background: #374151; }
+    .btn-save-channels { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .btn-save-channels:hover { opacity: .85; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .featured-card { flex-direction: column; }
+      .featured-thumbnail { width: 100%; height: 180px; }
+      .outliers-grid { grid-template-columns: 1fr; }
+      .posts-grid { grid-template-columns: 1fr; }
+      .uso-grid { grid-template-columns: 1fr; }
+    }
     @media (max-width: 600px) {
-      header, main { padding: 16px 20px; }
-      .date-bar { padding: 10px 20px; }
+      .section { padding: 20px 16px; }
+      #app-header { padding: 0 16px; }
+      .header-title { display: none; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">🎬</div>
-  <div>
-    <h1>Digital Marcia — Content Studio</h1>
-    <p>Videos outlier detectados · Generador de guiones · Repurposer</p>
+<header id="app-header">
+  <div class="header-brand">
+    <span class="header-logo">🎬</span>
+    <span class="header-title">Digital Marcia — Content Studio</span>
   </div>
-  <div class="usage-badge" id="usage-badge">
-    💰 Hoy: <strong>$${usage.today.toFixed(4)}</strong> &nbsp;|&nbsp; Total: <strong>$${usage.total.toFixed(4)}</strong> &nbsp;<a href="/usage">↗ historial</a>
-  </div>
+  <nav class="header-nav">
+    <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
+    <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
+    <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
+    <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
+  </nav>
+  <div class="header-cost" id="header-cost">💰 <strong>$${usage.today.toFixed(4)}</strong> hoy</div>
 </header>
 
-<div class="date-bar">
-  Último análisis: <span>${date || 'Sin datos aún'}</span>
-  &nbsp;·&nbsp; ${videos.length} outliers encontrados
-</div>
+<div id="app-body">
 
-<main>
-  <div class="section-title" style="justify-content:space-between;align-items:center;">
-    <span>🚀 Outliers del día</span>
+<!-- ── HOY ── -->
+<section id="section-hoy" class="section active">
+  <div class="hoy-date">
+    Análisis del <span>${date || 'Sin datos aún'}</span> · ${videos.length} outliers encontrados
+  </div>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Mejor score</div>
+      <div class="metric-value ${topScore >= 500 ? 'viral' : topScore >= 200 ? 'strong' : ''}">${topScore}x</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total outliers</div>
+      <div class="metric-value">${videos.length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Canales monitoreados</div>
+      <div class="metric-value" id="metric-channels">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Generaciones hoy</div>
+      <div class="metric-value">${generationsToday}</div>
+    </div>
+  </div>
+  ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 del día</div>' : ''}
+  ${featuredCardHtml}
+  ${videos.length > 0 ? '<button class="btn-see-all" onclick="showSection(\'outliers\')">Ver todos los outliers →</button>' : ''}
+</section>
+
+<!-- ── OUTLIERS ── -->
+<section id="section-outliers" class="section">
+  <div class="section-header">
+    <h2 class="section-title">📊 Outlier Feed</h2>
     <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
   </div>
-  ${cards}
-
-  <!-- ── MÓDULO E: Repurposer ── -->
-  <div class="repurposer">
-    <div class="section-title">♻️ Repurposer — Threads &amp; X</div>
-    <textarea id="repurpose-input" placeholder="Pega aquí el guion completo o el título del video que quieres convertir en posts..."></textarea>
-    <br/>
-    <button class="btn-repurpose" onclick="generatePosts()">⚡ Generar 6 posts</button>
-    <div class="posts-loading" id="posts-loading">
-      <div class="spinner" style="border-top-color:#22d3ee;"></div>
-      <span>Generando posts con Claude...</span>
-    </div>
-    <div class="posts-grid" id="posts-grid"></div>
+  <div class="filter-row">
+    <button class="filter-pill active" onclick="setFilter('all',this)">Todos</button>
+    <button class="filter-pill" onclick="setFilter('viral',this)">🔥 500x+ Viral</button>
+    <button class="filter-pill" onclick="setFilter('strong',this)">💪 200x+ Fuerte</button>
+    <button class="filter-pill" onclick="setFilter('normal',this)">📉 Menor 200x</button>
   </div>
-</main>
+  <div class="outliers-grid" id="outliers-grid">
+    ${outlierCards}
+  </div>
+</section>
+
+<!-- ── REPURPOSER ── -->
+<section id="section-repurposer" class="section">
+  <div class="section-header">
+    <h2 class="section-title">♻️ Repurposer</h2>
+  </div>
+  <p class="repurposer-desc">Convierte un guion o idea en 6 posts para Threads y X.</p>
+  <textarea id="repurpose-input" class="repurposer-textarea" placeholder="Pega aquí el guion completo o el título del video que quieres convertir en posts..."></textarea>
+  <br/>
+  <button class="btn-repurpose" onclick="generatePosts()">⚡ Generar 6 posts</button>
+  <div class="posts-loading" id="posts-loading">
+    <div class="spinner" style="border-top-color:#22d3ee;"></div>
+    <span>Generando posts con Claude...</span>
+  </div>
+  <div class="posts-grid" id="posts-grid"></div>
+</section>
+
+<!-- ── USO ── -->
+<section id="section-uso" class="section">
+  <div class="section-header">
+    <h2 class="section-title">💰 Uso y Costos</h2>
+    <a href="/usage" target="_blank" style="font-size:13px;color:#6366f1;text-decoration:none;">Ver página completa ↗</a>
+  </div>
+  <div id="uso-content"><p style="color:#6b7280;font-size:14px;">Cargando...</p></div>
+</section>
+
+</div>
+
+<!-- ── CHANNEL MODAL ── -->
+<div id="channel-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;">
+  <div class="channel-modal">
+    <div class="ch-modal-header">
+      <h2>⚙️ Gestionar canales</h2>
+      <button class="ch-modal-close" onclick="closeChannelModal()">✕</button>
+    </div>
+    <div class="ch-modal-body">
+      <div class="ch-search-row">
+        <input id="ch-search-input" type="text" placeholder="@handle, nombre o URL del canal..."/>
+        <button id="ch-search-btn" class="btn-search" onclick="searchChannel()">Buscar</button>
+      </div>
+      <div id="ch-preview" class="ch-preview">
+        <div style="flex:1;">
+          <div id="ch-preview-name" class="ch-preview-name"></div>
+          <div id="ch-preview-id" class="ch-preview-id"></div>
+        </div>
+        <button class="btn-add-ch" onclick="addChannel()">+ Agregar</button>
+      </div>
+      <div class="ch-section-label">Canales actuales</div>
+      <div id="ch-list" class="ch-list"></div>
+      <div id="ch-msg" class="ch-msg"></div>
+    </div>
+    <div class="ch-modal-footer">
+      <button class="btn-cancel-modal" onclick="closeChannelModal()">Cancelar</button>
+      <button id="ch-save-btn" class="btn-save-channels" onclick="saveChannels()">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
 
 <script>
   const videos = ${JSON.stringify(videos)};
 
-  // ── Format selection flow ─────────────────────────────────────────────────
-  function startGenerate(index) {
-    const btn = document.getElementById(\`btn-gen-\${index}\`);
-    btn.style.display = 'none';
-    document.getElementById(\`format-sel-\${index}\`).style.display = 'block';
+  // ── Tab navigation ──────────────────────────────────────────────────────────
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('section-' + id).classList.add('active');
+    document.querySelector('[data-section="' + id + '"]').classList.add('active');
+    if (id === 'uso') loadUso();
   }
 
-  function selectFormat(index, format) {
-    document.getElementById(\`format-sel-\${index}\`).style.display = 'none';
-    if (format === 'long') {
-      generateScript(index);
-    } else {
-      document.getElementById(\`qty-sel-\${index}\`).style.display = 'block';
+  // ── Channel count ───────────────────────────────────────────────────────────
+  fetch('/channels').then(r => r.json()).then(d => {
+    const el = document.getElementById('metric-channels');
+    if (el) el.textContent = (d.channels || []).length;
+  }).catch(() => {});
+
+  // ── Filters ─────────────────────────────────────────────────────────────────
+  function setFilter(type, btn) {
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.o-card').forEach(card => {
+      const s = parseInt(card.dataset.score, 10);
+      const show = type === 'all' || (type === 'viral' && s >= 500) || (type === 'strong' && s >= 200 && s < 500) || (type === 'normal' && s < 200);
+      card.style.display = show ? '' : 'none';
+    });
+  }
+
+  // ── Card expansion + lazy pattern analysis ──────────────────────────────────
+  function toggleCard(index) {
+    const card = document.getElementById('o-card-' + index);
+    const isExpanded = card.classList.contains('expanded');
+    document.querySelectorAll('.o-card.expanded').forEach(c => { if (c !== card) c.classList.remove('expanded'); });
+    if (isExpanded) { card.classList.remove('expanded'); return; }
+    card.classList.add('expanded');
+    const patternEl = document.getElementById('pattern-' + index);
+    if (patternEl && patternEl.dataset.loaded !== 'true') loadPattern(index);
+  }
+
+  async function loadPattern(index) {
+    const v = videos[index];
+    const patternEl = document.getElementById('pattern-' + index);
+    const loadingEl = document.getElementById('pattern-loading-' + index);
+    patternEl.dataset.loaded = 'true';
+    loadingEl.style.display = 'flex';
+    try {
+      const res = await fetch('/analyze-pattern', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoTitle: v.title, channel: v.channel, score: v.score }),
+      });
+      const data = await res.json();
+      loadingEl.style.display = 'none';
+      if (data.error) { patternEl.innerHTML = '<p style="color:#f87171;font-size:13px;">Error al analizar.</p>'; return; }
+      patternEl.innerHTML = \`
+        <div class="pattern-result">
+          <div class="pattern-item">
+            <div class="pattern-item-label">Patrón de título</div>
+            <div class="pattern-item-value">\${data.titlePattern}</div>
+          </div>
+          <div class="pattern-item">
+            <div class="pattern-item-label">Tipo de hook</div>
+            <div class="pattern-item-value">\${data.hookType}</div>
+          </div>
+        </div>\`;
+    } catch {
+      loadingEl.style.display = 'none';
+      patternEl.innerHTML = '<p style="color:#f87171;font-size:13px;">Error de red.</p>';
     }
   }
 
-  // ── Long script generator ─────────────────────────────────────────────────
+  // ── Format flow ──────────────────────────────────────────────────────────────
+  function startGenerate(index, e) {
+    e.stopPropagation();
+    const sel = document.getElementById('format-sel-' + index);
+    sel.style.display = sel.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function selectFormat(index, format, e) {
+    e.stopPropagation();
+    document.getElementById('format-sel-' + index).style.display = 'none';
+    if (format === 'long') generateScript(index);
+    else document.getElementById('qty-sel-' + index).style.display = 'block';
+  }
+
+  // ── Long script ──────────────────────────────────────────────────────────────
   async function generateScript(index) {
     const v = videos[index];
-    const btn = document.querySelector(\`[data-index="\${index}"] .btn-gen\`);
-    const box = document.getElementById(\`script-\${index}\`);
-    const loading = document.getElementById(\`loading-\${index}\`);
-    const content = document.getElementById(\`content-\${index}\`);
-    const actions = document.getElementById(\`script-actions-\${index}\`);
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Generando...';
-    box.style.display = 'block';
-    loading.style.display = 'flex';
-    content.textContent = '';
-    actions.style.display = 'none';
-
+    const btn = document.getElementById('gen-btn-' + index);
+    const box = document.getElementById('script-' + index);
+    const loading = document.getElementById('loading-' + index);
+    const content = document.getElementById('content-' + index);
+    const actions = document.getElementById('script-actions-' + index);
+    btn.disabled = true; btn.textContent = '⏳ Generando...';
+    box.style.display = 'block'; loading.style.display = 'flex';
+    content.textContent = ''; actions.style.display = 'none';
     try {
       const res = await fetch('/generate-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoTitle: v.title, channel: v.channel, score: v.score, url: v.url }),
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error al generar guion');
-      }
-
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error'); }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       loading.style.display = 'none';
-      let full = '';
-      let streamError = null;
-
+      let full = '', streamError = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split('\\n')) {
+        for (const line of decoder.decode(value, { stream: true }).split('\\n')) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') continue;
           try {
             const json = JSON.parse(payload);
             if (json.error) { streamError = json.error; break; }
-            if (json.text) {
-              full += json.text;
-              content.textContent = full;
-              content.scrollTop = content.scrollHeight;
-            }
-            if (json.done && json.cost) {
-              document.getElementById('usage-badge').innerHTML =
-                '💰 Actualizando... <a href="/usage">↗ historial</a>';
-              setTimeout(() => location.reload(), 1500);
-            }
+            if (json.text) { full += json.text; content.textContent = full; content.scrollTop = content.scrollHeight; }
+            if (json.done) { document.getElementById('header-cost').innerHTML = '💰 <strong>Actualizando...</strong> hoy'; setTimeout(() => location.reload(), 1500); }
           } catch {}
         }
         if (streamError) break;
       }
-
       if (streamError) throw new Error(streamError);
       if (!full) throw new Error('El modelo no devolvió contenido.');
-
-      actions.style.display = 'flex';
-      btn.textContent = '✅ Guion generado';
+      actions.style.display = 'flex'; btn.textContent = '✅ Generado';
       document.getElementById('repurpose-input').value = full;
     } catch (err) {
-      loading.style.display = 'none';
-      btn.disabled = false;
-      btn.textContent = '✨ Generar guion';
+      loading.style.display = 'none'; btn.disabled = false; btn.textContent = '✨ Generar guion';
       content.textContent = '❌ Error: ' + err.message;
     }
   }
 
   function copyScript(index) {
-    const content = document.getElementById(\`content-\${index}\`);
-    navigator.clipboard.writeText(content.textContent).then(() => {
-      const btns = document.querySelectorAll(\`#script-actions-\${index} .btn-copy\`);
-      btns.forEach(b => { b.textContent = '✅ Copiado!'; setTimeout(() => { b.textContent = '📋 Copiar guion'; }, 2000); });
+    navigator.clipboard.writeText(document.getElementById('content-' + index).textContent).then(() => {
+      const btn = document.querySelector('#script-actions-' + index + ' .btn-copy');
+      btn.textContent = '✅ Copiado!';
+      setTimeout(() => { btn.textContent = '📋 Copiar guion'; }, 2000);
     });
   }
 
   function openTeleprompter(index) {
-    const content = document.getElementById(\`content-\${index}\`);
-    localStorage.setItem('teleprompter_script', content.textContent);
+    localStorage.setItem('teleprompter_script', document.getElementById('content-' + index).textContent);
     window.open('/teleprompter', '_blank');
   }
 
-  // ── Shorts generator ──────────────────────────────────────────────────────
-  async function generateShorts(index, qty) {
+  // ── Shorts ──────────────────────────────────────────────────────────────────
+  async function generateShorts(index, qty, e) {
+    if (e) e.stopPropagation();
     const v = videos[index];
-    document.getElementById(\`qty-sel-\${index}\`).style.display = 'none';
-
-    const box = document.getElementById(\`shorts-\${index}\`);
-    const loading = document.getElementById(\`shorts-loading-\${index}\`);
-    const contentEl = document.getElementById(\`shorts-content-\${index}\`);
-
-    box.style.display = 'block';
-    loading.style.display = 'flex';
-    contentEl.innerHTML = '';
-
+    document.getElementById('qty-sel-' + index).style.display = 'none';
+    const box = document.getElementById('shorts-' + index);
+    const loading = document.getElementById('shorts-loading-' + index);
+    const contentEl = document.getElementById('shorts-content-' + index);
+    box.style.display = 'block'; loading.style.display = 'flex'; contentEl.innerHTML = '';
     try {
       const res = await fetch('/generate-shorts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoTitle: v.title, channel: v.channel, score: v.score, url: v.url, quantity: qty }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al generar shorts');
-
+      if (!res.ok) throw new Error(data.error || 'Error');
       loading.style.display = 'none';
       contentEl.innerHTML = data.shorts.map((s, i) => \`
         <div class="short-card">
@@ -855,105 +655,113 @@ app.get('/', async (req, res) => {
             <span class="short-num">SHORT \${i + 1}</span>
             <span class="short-filming">\${s.filming}</span>
           </div>
-          <div class="short-section">
-            <div class="short-section-label">Hook — primeros 3 segundos</div>
-            <div class="short-text">\${s.hook}</div>
-          </div>
-          <div class="short-section">
-            <div class="short-section-label">Desarrollo</div>
-            <div class="short-text">\${s.body}</div>
-          </div>
-          <div class="short-section">
-            <div class="short-section-label">CTA</div>
-            <div class="short-text">\${s.cta}</div>
-          </div>
+          <div class="short-section"><div class="short-section-label">Hook</div><div class="short-text">\${s.hook}</div></div>
+          <div class="short-section"><div class="short-section-label">Desarrollo</div><div class="short-text">\${s.body}</div></div>
+          <div class="short-section"><div class="short-section-label">CTA</div><div class="short-text">\${s.cta}</div></div>
           <button class="short-copy-btn" onclick="copyShort(this, \\\`\${s.hook}\\\\n\\\\n\${s.body}\\\\n\\\\n\${s.cta}\\\`)">📋 Copiar short \${i + 1}</button>
-        </div>
-      \`).join('');
+        </div>\`).join('');
     } catch (err) {
       loading.style.display = 'none';
-      contentEl.innerHTML = \`<p style="color:#f87171;padding:12px;">❌ \${err.message}</p>\`;
+      contentEl.innerHTML = \`<p style="color:#ef4444;padding:12px;">❌ \${err.message}</p>\`;
     }
   }
 
   function copyShort(btn, text) {
     navigator.clipboard.writeText(text).then(() => {
       btn.textContent = '✅ Copiado';
-      setTimeout(() => { btn.textContent = btn.textContent.replace('✅ Copiado', '📋 Copiar short'); }, 2000);
+      setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
     });
   }
 
-  // ── Repurposer ────────────────────────────────────────────────────────────
-  const POST_LABELS = [
-    'El dato sorprendente',
-    'La historia personal',
-    'La reflexión sobre trabajar online',
-    'El contraste nómada vs corporativo',
-    'El consejo práctico',
-    'La pregunta que genera debate',
-  ];
+  // ── Repurposer ──────────────────────────────────────────────────────────────
+  const POST_LABELS = ['El dato sorprendente','La historia personal','La reflexión sobre trabajar online','El contraste nómada vs corporativo','El consejo práctico','La pregunta que genera debate'];
 
   async function generatePosts() {
     const input = document.getElementById('repurpose-input').value.trim();
     if (!input) { alert('Pega el guion o título primero.'); return; }
-
     const btn = document.querySelector('.btn-repurpose');
     const loading = document.getElementById('posts-loading');
     const grid = document.getElementById('posts-grid');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Generando...';
-    loading.style.display = 'flex';
-    grid.innerHTML = '';
-
+    btn.disabled = true; btn.textContent = '⏳ Generando...';
+    loading.style.display = 'flex'; grid.innerHTML = '';
     try {
       const res = await fetch('/generate-posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: input }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al generar posts');
-
+      if (!res.ok) throw new Error(data.error || 'Error');
       loading.style.display = 'none';
       grid.innerHTML = data.posts.map((post, i) => \`
         <div class="post-card">
-          <div class="post-card-label">\${POST_LABELS[i] || 'Post \${i + 1}'}</div>
+          <div class="post-card-label">\${POST_LABELS[i] || 'Post ' + (i+1)}</div>
           <div class="post-versions">
             <div class="post-version">
               <div class="post-platform threads">Threads</div>
               <div class="post-text" id="pt-\${i}">\${post.threads}</div>
               <div class="post-chars">\${post.threads.length} / 500 chars</div>
-              <button class="btn-copy-post" onclick="copyPost('pt-\${i}', this)">Copiar</button>
+              <button class="btn-copy-post" onclick="copyPost('pt-\${i}',this)">Copiar</button>
             </div>
             <div class="post-version">
               <div class="post-platform x">X / Twitter</div>
               <div class="post-text" id="px-\${i}">\${post.x}</div>
               <div class="post-chars">\${post.x.length} / 280 chars</div>
-              <button class="btn-copy-post" onclick="copyPost('px-\${i}', this)">Copiar</button>
+              <button class="btn-copy-post" onclick="copyPost('px-\${i}',this)">Copiar</button>
             </div>
           </div>
-        </div>
-      \`).join('');
+        </div>\`).join('');
     } catch (err) {
       loading.style.display = 'none';
-      grid.innerHTML = \`<p style="color:#f87171;">❌ \${err.message}</p>\`;
+      grid.innerHTML = \`<p style="color:#ef4444;">❌ \${err.message}</p>\`;
     } finally {
-      btn.disabled = false;
-      btn.textContent = '⚡ Generar 6 posts';
+      btn.disabled = false; btn.textContent = '⚡ Generar 6 posts';
     }
   }
 
   function copyPost(id, btn) {
-    const text = document.getElementById(id).textContent;
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => {
       btn.textContent = '✅ Copiado';
       setTimeout(() => { btn.textContent = 'Copiar'; }, 2000);
     });
   }
 
-  // ── CHANNEL MANAGER ──
+  // ── USO (lazy) ──────────────────────────────────────────────────────────────
+  let usoLoaded = false;
+  async function loadUso() {
+    if (usoLoaded) return;
+    usoLoaded = true;
+    try {
+      const [sr, hr] = await Promise.all([fetch('/usage-summary'), fetch('/usage-data')]);
+      const summary = await sr.json();
+      const hist = await hr.json();
+      const dailyRows = (hist.dailyTotals || []).map(d =>
+        \`<tr><td>\${d.date}</td><td style="color:#a78bfa;font-weight:700;">$\${d.cost.toFixed(4)}</td></tr>\`
+      ).join('');
+      const histRows = (hist.history || []).slice(0, 30).map(h => {
+        const tc = h.type === 'guion' ? 'type-guion' : h.type === 'short' ? 'type-short' : 'type-posts';
+        return \`<tr>
+          <td>\${(h.date||'').slice(0,10)}</td>
+          <td><span class="type-badge-uso \${tc}">\${h.type}</span></td>
+          <td>\${(h.input_tokens||0).toLocaleString()}</td>
+          <td>\${(h.output_tokens||0).toLocaleString()}</td>
+          <td style="color:#a78bfa;font-weight:700;">$\${(h.cost_usd||0).toFixed(4)}</td>
+        </tr>\`;
+      }).join('');
+      document.getElementById('uso-content').innerHTML = \`
+        <div class="uso-grid">
+          <div class="uso-card"><div class="uso-card-label">Costo hoy</div><div class="uso-card-value">$\${(summary.today||0).toFixed(4)}</div></div>
+          <div class="uso-card"><div class="uso-card-label">Total acumulado</div><div class="uso-card-value">$\${(summary.total||0).toFixed(4)}</div></div>
+        </div>
+        <div class="uso-section-label">Últimos 7 días</div>
+        <table class="uso-table" style="margin-bottom:28px;"><thead><tr><th>Fecha</th><th>Costo</th></tr></thead>
+        <tbody>\${dailyRows||'<tr><td colspan="2" style="color:#4b5563;padding:12px;">Sin datos</td></tr>'}</tbody></table>
+        <div class="uso-section-label">Historial reciente</div>
+        <table class="uso-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Tokens entrada</th><th>Tokens salida</th><th>Costo</th></tr></thead>
+        <tbody>\${histRows||'<tr><td colspan="5" style="color:#4b5563;padding:12px;">Sin datos</td></tr>'}</tbody></table>\`;
+    } catch { document.getElementById('uso-content').innerHTML = '<p style="color:#f87171;">Error al cargar datos.</p>'; }
+  }
+
+  // ── Channel manager ─────────────────────────────────────────────────────────
   let channelList = [];
 
   async function openChannelModal() {
@@ -963,45 +771,32 @@ app.get('/', async (req, res) => {
     document.getElementById('ch-msg').textContent = '';
     await loadCurrentChannels();
   }
-
-  function closeChannelModal() {
-    document.getElementById('channel-modal-overlay').style.display = 'none';
-  }
+  function closeChannelModal() { document.getElementById('channel-modal-overlay').style.display = 'none'; }
 
   async function loadCurrentChannels() {
     try {
       const res = await fetch('/channels');
-      const data = await res.json();
-      channelList = data.channels || [];
+      channelList = (await res.json()).channels || [];
       renderChannelList();
-    } catch {
-      document.getElementById('ch-msg').textContent = 'Error al cargar canales.';
-    }
+    } catch { document.getElementById('ch-msg').textContent = 'Error al cargar canales.'; }
   }
 
   function renderChannelList() {
-    const el = document.getElementById('ch-current-list');
-    if (channelList.length === 0) {
-      el.innerHTML = '<p style="color:#888;font-size:13px;">No hay canales guardados.</p>';
-      return;
-    }
+    const el = document.getElementById('ch-list');
+    if (!channelList.length) { el.innerHTML = '<p style="color:#4b5563;font-size:13px;padding:8px 0;">No hay canales guardados.</p>'; return; }
     el.innerHTML = channelList.map((c, i) => \`
       <div class="ch-item">
-        <div class="ch-item-info">
-          <span class="ch-item-name">\${c.name || c.channelId || c.id}</span>
-          <span class="ch-item-id">\${c.channelId || c.id || ''}</span>
-        </div>
+        <span class="ch-item-name">\${c.name || c.channelId || c.id}</span>
+        <span class="ch-item-id">\${c.channelId || c.id || ''}</span>
         <button class="ch-remove-btn" onclick="removeChannel(\${i})">✕</button>
-      </div>
-    \`).join('');
+      </div>\`).join('');
   }
 
   async function searchChannel() {
     const query = document.getElementById('ch-search-input').value.trim();
     if (!query) return;
     const btn = document.getElementById('ch-search-btn');
-    btn.textContent = 'Buscando...';
-    btn.disabled = true;
+    btn.textContent = 'Buscando...'; btn.disabled = true;
     document.getElementById('ch-preview').style.display = 'none';
     document.getElementById('ch-msg').textContent = '';
     try {
@@ -1009,19 +804,17 @@ app.get('/', async (req, res) => {
       const data = await res.json();
       if (data.error) {
         document.getElementById('ch-msg').textContent = data.error;
+        document.getElementById('ch-msg').style.color = '#ef4444';
       } else {
         document.getElementById('ch-preview-name').textContent = data.name;
         document.getElementById('ch-preview-id').textContent = data.channelId;
-        document.getElementById('ch-preview-subs').textContent = data.subscribers ? parseInt(data.subscribers).toLocaleString() + ' subs' : '';
-        document.getElementById('ch-preview').style.display = 'flex';
-        document.getElementById('ch-preview').dataset.channelId = data.channelId;
-        document.getElementById('ch-preview').dataset.channelName = data.name;
+        const preview = document.getElementById('ch-preview');
+        preview.style.display = 'flex';
+        preview.dataset.channelId = data.channelId;
+        preview.dataset.channelName = data.name;
       }
-    } catch {
-      document.getElementById('ch-msg').textContent = 'Error al buscar canal.';
-    }
-    btn.textContent = 'Buscar';
-    btn.disabled = false;
+    } catch { document.getElementById('ch-msg').textContent = 'Error al buscar canal.'; }
+    btn.textContent = 'Buscar'; btn.disabled = false;
   }
 
   function addChannel() {
@@ -1031,6 +824,7 @@ app.get('/', async (req, res) => {
     if (!channelId) return;
     if (channelList.some(c => (c.channelId || c.id) === channelId)) {
       document.getElementById('ch-msg').textContent = 'Este canal ya está en la lista.';
+      document.getElementById('ch-msg').style.color = '#f97316';
       return;
     }
     channelList.push({ name, channelId });
@@ -1040,84 +834,33 @@ app.get('/', async (req, res) => {
     document.getElementById('ch-msg').textContent = '';
   }
 
-  function removeChannel(i) {
-    channelList.splice(i, 1);
-    renderChannelList();
-  }
+  function removeChannel(i) { channelList.splice(i, 1); renderChannelList(); }
 
   async function saveChannels() {
     const btn = document.getElementById('ch-save-btn');
-    btn.textContent = 'Guardando...';
-    btn.disabled = true;
+    btn.textContent = 'Guardando...'; btn.disabled = true;
     document.getElementById('ch-msg').textContent = '';
     try {
       const res = await fetch('/channels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channels: channelList }),
       });
       const data = await res.json();
-      if (data.ok) {
-        document.getElementById('ch-msg').textContent = '✅ Canales guardados. El próximo análisis usará esta lista.';
-        document.getElementById('ch-msg').style.color = '#4ade80';
-      } else {
-        document.getElementById('ch-msg').textContent = data.error || 'Error al guardar.';
-        document.getElementById('ch-msg').style.color = '#f87171';
-      }
-    } catch {
-      document.getElementById('ch-msg').textContent = 'Error de red al guardar.';
-      document.getElementById('ch-msg').style.color = '#f87171';
-    }
-    btn.textContent = '💾 Guardar cambios';
-    btn.disabled = false;
+      if (data.ok) { document.getElementById('ch-msg').textContent = '✅ Canales guardados.'; document.getElementById('ch-msg').style.color = '#4ade80'; }
+      else { document.getElementById('ch-msg').textContent = data.error || 'Error al guardar.'; document.getElementById('ch-msg').style.color = '#ef4444'; }
+    } catch { document.getElementById('ch-msg').textContent = 'Error de red.'; document.getElementById('ch-msg').style.color = '#ef4444'; }
+    btn.textContent = '💾 Guardar cambios'; btn.disabled = false;
   }
 
-  document.getElementById('ch-search-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') searchChannel();
-  });
+  document.getElementById('ch-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchChannel(); });
+  document.getElementById('channel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeChannelModal(); });
 </script>
-
-<!-- CHANNEL MANAGER MODAL -->
-<div id="channel-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
-  <div class="channel-modal">
-    <div class="ch-modal-header">
-      <h2 style="margin:0;font-size:18px;">⚙️ Gestionar canales</h2>
-      <button onclick="closeChannelModal()" style="background:none;border:none;color:#aaa;font-size:22px;cursor:pointer;line-height:1;">✕</button>
-    </div>
-
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <input id="ch-search-input" type="text" placeholder="@handle, nombre o URL del canal..." style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#fff;font-size:14px;"/>
-      <button id="ch-search-btn" onclick="searchChannel()" style="padding:9px 16px;border-radius:8px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:14px;white-space:nowrap;">Buscar</button>
-    </div>
-
-    <div id="ch-preview" style="display:none;align-items:center;justify-content:space-between;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;padding:10px 14px;margin-bottom:10px;">
-      <div>
-        <div id="ch-preview-name" style="font-weight:600;font-size:14px;"></div>
-        <div style="display:flex;gap:12px;margin-top:3px;">
-          <span id="ch-preview-id" style="font-size:11px;color:#888;font-family:monospace;"></span>
-          <span id="ch-preview-subs" style="font-size:11px;color:#6366f1;"></span>
-        </div>
-      </div>
-      <button onclick="addChannel()" style="padding:7px 14px;border-radius:6px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:13px;">+ Agregar</button>
-    </div>
-
-    <div style="font-size:13px;color:#aaa;margin-bottom:6px;">Canales actuales:</div>
-    <div id="ch-current-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px;"></div>
-
-    <div id="ch-msg" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
-
-    <div style="display:flex;justify-content:flex-end;gap:10px;">
-      <button onclick="closeChannelModal()" style="padding:9px 18px;border-radius:8px;background:#2a2a2a;color:#aaa;border:1px solid #333;cursor:pointer;font-size:14px;">Cancelar</button>
-      <button id="ch-save-btn" onclick="saveChannels()" style="padding:9px 18px;border-radius:8px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:14px;">💾 Guardar cambios</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>`;
 
   res.send(html);
 });
+
 
 // ── GET /teleprompter ──────────────────────────────────────────────────────────
 app.get('/teleprompter', (req, res) => {
@@ -1836,6 +1579,37 @@ app.get('/usage', async (req, res) => {
 </script>
 </body>
 </html>`);
+});
+
+// ── POST /analyze-pattern ─────────────────────────────────────────────────────
+app.post('/analyze-pattern', async (req, res) => {
+  const { videoTitle, channel, score } = req.body;
+  if (!videoTitle) return res.status(400).json({ error: 'Falta videoTitle.' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: `Analiza brevemente este título de video que fue ${score}x el promedio del canal "${channel}": "${videoTitle}"\n\nResponde ÚNICAMENTE con JSON válido:\n{"titlePattern": "descripción del patrón de título en 1-2 oraciones", "hookType": "tipo de hook: Curiosity Gap | VS Comparison | Number List | Controversy | How-To | Personal Story | Shocking Stat — con una breve explicación de por qué funciona en este caso"}` }],
+    });
+    const raw = message.content[0].text.trim();
+    const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    res.json(parsed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /usage-data ───────────────────────────────────────────────────────────
+app.get('/usage-data', async (req, res) => {
+  const [history, dailyTotals] = await Promise.all([
+    getUsageHistory(50),
+    getDailyTotals(7),
+  ]);
+  res.json({ history, dailyTotals });
 });
 
 function startServer() {

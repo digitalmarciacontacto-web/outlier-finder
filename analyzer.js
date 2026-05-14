@@ -27,6 +27,8 @@ function buildPayload(outliers) {
       views: v.views,
       channelAvg: v.averageViews,
       url: v.url,
+      thumbnail: v.thumbnail || '',
+      publishedAt: v.publishedAt || '',
     })),
   };
 }
