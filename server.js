@@ -350,6 +350,56 @@ app.get('/', async (req, res) => {
     .btn-save-channels { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
     .btn-save-channels:hover { opacity: .85; }
 
+    /* ── MI CANAL ── */
+    .canal-platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .platform-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .platform-card-header { display: flex; align-items: center; gap: 12px; }
+    .platform-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .yt-icon { background: #ff0000; color: #fff; font-size: 16px; font-weight: 900; }
+    .ig-icon { background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045); color: #fff; }
+    .fb-icon { background: #1877f2; color: #fff; }
+    .tt-icon { background: #010101; color: #fff; border: 1px solid #333; }
+    .platform-name { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .platform-handle { font-size: 12px; color: #6b7280; }
+    .platform-live-badge { margin-left: auto; background: #052e16; color: #4ade80; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .05em; border: 1px solid #065f46; }
+    .platform-followers { font-size: 28px; font-weight: 800; color: #e2e8f0; }
+    .platform-status-msg { font-size: 12px; color: #4b5563; }
+    .btn-connect { background: #1f2937; color: #4b5563; border: 1px solid #374151; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: not-allowed; width: fit-content; opacity: .6; }
+    .yt-loading { display: flex; align-items: center; gap: 10px; color: #6b7280; font-size: 13px; }
+    .yt-quick-stats { display: flex; gap: 16px; }
+    .yt-qstat { display: flex; flex-direction: column; gap: 2px; }
+    .yt-qstat-val { font-size: 22px; font-weight: 800; color: #e2e8f0; }
+    .yt-qstat-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+    .ypp-section { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px; margin-bottom: 28px; }
+    .ypp-title { font-size: 14px; font-weight: 700; color: #fbbf24; margin-bottom: 16px; }
+    .ypp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .ypp-item-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .ypp-item-vals { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+    .ypp-item-vals span { color: #a78bfa; }
+    .progress-bar-wrap { background: #111; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 6px; }
+    .progress-bar-fill { height: 100%; border-radius: 99px; transition: width .5s ease; }
+    .ypp-pct { font-size: 11px; font-weight: 700; }
+    .ypp-note { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .yt-expanded { margin-bottom: 28px; }
+    .yt-section-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 14px; }
+    .yt-video-list { display: flex; flex-direction: column; gap: 10px; }
+    .yt-video-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; display: flex; align-items: center; gap: 14px; padding: 10px; overflow: hidden; }
+    .yt-video-thumb { width: 120px; height: 68px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #111; }
+    .yt-video-thumb-placeholder { width: 120px; height: 68px; border-radius: 6px; background: #111; display: flex; align-items: center; justify-content: center; color: #2a2a2a; font-size: 24px; flex-shrink: 0; }
+    .yt-video-body { flex: 1; min-width: 0; }
+    .yt-video-title { font-size: 13px; font-weight: 600; color: #e2e8f0; line-height: 1.4; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .yt-video-meta { font-size: 12px; color: #6b7280; display: flex; gap: 12px; flex-wrap: wrap; }
+    .yt-video-rank { font-size: 18px; font-weight: 900; color: #2a2a2a; width: 32px; text-align: center; flex-shrink: 0; }
+    .yt-top-card { background: #1a1a1a; border: 1px solid #fbbf24; border-radius: 12px; display: flex; gap: 16px; padding: 16px; overflow: hidden; }
+    .yt-top-thumb { width: 180px; height: 102px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #111; }
+    .yt-top-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .yt-top-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #fbbf24; }
+    .yt-top-title { font-size: 16px; font-weight: 700; color: #e2e8f0; line-height: 1.4; }
+    .yt-top-meta { font-size: 13px; color: #6b7280; }
+    .yt-avg-row { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+    .yt-avg-val { font-size: 24px; font-weight: 800; color: #a78bfa; }
+    .yt-avg-label { font-size: 12px; color: #6b7280; }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .metrics-grid { grid-template-columns: repeat(2, 1fr); }
@@ -376,6 +426,7 @@ app.get('/', async (req, res) => {
   <nav class="header-nav">
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
+    <button class="nav-tab" data-section="canal" onclick="showSection('canal')">Mi Canal</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
@@ -427,6 +478,121 @@ app.get('/', async (req, res) => {
   <div class="outliers-grid" id="outliers-grid">
     ${outlierCards}
   </div>
+</section>
+
+<!-- ── MI CANAL ── -->
+<section id="section-canal" class="section">
+  <div class="section-header">
+    <h2 class="section-title">📡 Mi Canal</h2>
+  </div>
+
+  <!-- Platform cards 2x2 -->
+  <div class="canal-platforms-grid">
+
+    <!-- YouTube (real data) -->
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon yt-icon">▶</div>
+        <div>
+          <div class="platform-name">YouTube</div>
+          <div class="platform-handle">@marcia.nomada</div>
+        </div>
+        <div class="platform-live-badge">Live</div>
+      </div>
+      <div class="yt-loading" id="yt-loading"><div class="spinner"></div><span>Cargando...</span></div>
+      <div id="yt-quick-stats" class="yt-quick-stats" style="display:none;">
+        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-subs">—</span><span class="yt-qstat-label">Suscriptores</span></div>
+        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-views-total">—</span><span class="yt-qstat-label">Vistas totales</span></div>
+        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-videos-count">—</span><span class="yt-qstat-label">Videos</span></div>
+      </div>
+    </div>
+
+    <!-- Instagram placeholder -->
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon ig-icon">📷</div>
+        <div>
+          <div class="platform-name">Instagram</div>
+          <div class="platform-handle">@digital.marcia</div>
+        </div>
+      </div>
+      <div class="platform-followers">1,730</div>
+      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
+      <button class="btn-connect" disabled>Conectar</button>
+    </div>
+
+    <!-- Facebook placeholder -->
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon fb-icon">f</div>
+        <div>
+          <div class="platform-name">Facebook</div>
+          <div class="platform-handle">Digital.Marcia</div>
+        </div>
+      </div>
+      <div class="platform-followers">1,500</div>
+      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
+      <button class="btn-connect" disabled>Conectar</button>
+    </div>
+
+    <!-- TikTok placeholder -->
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon tt-icon">♪</div>
+        <div>
+          <div class="platform-name">TikTok</div>
+          <div class="platform-handle">@marcia.nomada</div>
+        </div>
+      </div>
+      <div class="platform-followers">241</div>
+      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
+      <button class="btn-connect" disabled>Conectar</button>
+    </div>
+
+  </div>
+
+  <!-- YPP Progress (shown after data loads) -->
+  <div class="ypp-section" id="ypp-section" style="display:none;">
+    <div class="ypp-title">🏆 Progreso hacia YouTube Partner Program</div>
+    <div class="ypp-grid">
+      <div>
+        <div class="ypp-item-label">Suscriptores</div>
+        <div class="ypp-item-vals"><span id="ypp-subs-val">—</span> / 1,000</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="ypp-subs-bar" style="width:0%;background:#22c55e;"></div>
+        </div>
+        <div class="ypp-pct" id="ypp-subs-pct" style="color:#22c55e;"></div>
+      </div>
+      <div>
+        <div class="ypp-item-label">Watch Time (4,000 hrs)</div>
+        <div class="ypp-item-vals">Pendiente de calcular</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" style="width:0%;background:#6b7280;"></div>
+        </div>
+        <div class="ypp-note">⚠️ Los Shorts no cuentan para las 4,000 horas</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- YouTube expanded: top video + recent videos + avg -->
+  <div id="yt-expanded-section" style="display:none;">
+
+    <div class="yt-section-label">🏅 Video más visto</div>
+    <div id="yt-top-card"></div>
+
+    <div style="margin-top:24px;"></div>
+    <div class="yt-section-label">🕐 Últimos 5 videos</div>
+    <div class="yt-video-list" id="yt-video-list"></div>
+
+    <div id="yt-avg-row" class="yt-avg-row" style="display:none;">
+      <div>
+        <div class="yt-avg-val" id="yt-avg-val">—</div>
+        <div class="yt-avg-label">Promedio de vistas por video</div>
+      </div>
+    </div>
+
+  </div>
+
 </section>
 
 <!-- ── REPURPOSER ── -->
@@ -496,6 +662,7 @@ app.get('/', async (req, res) => {
     document.getElementById('section-' + id).classList.add('active');
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
+    if (id === 'canal') loadCanal();
   }
 
   // ── Channel count ───────────────────────────────────────────────────────────
@@ -854,6 +1021,94 @@ app.get('/', async (req, res) => {
 
   document.getElementById('ch-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchChannel(); });
   document.getElementById('channel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeChannelModal(); });
+
+  // ── Mi Canal ─────────────────────────────────────────────────────────────────
+  let canalLoaded = false;
+  async function loadCanal() {
+    if (canalLoaded) return;
+    canalLoaded = true;
+    const loadingEl = document.getElementById('yt-loading');
+    try {
+      const res = await fetch('/my-channel');
+      const data = await res.json();
+      if (data.error) {
+        loadingEl.innerHTML = \`<span style="color:#ef4444;">Error: \${data.error}</span>\`;
+        return;
+      }
+
+      // Quick stats
+      document.getElementById('yt-subs').textContent = fmtNum(data.subscribers);
+      document.getElementById('yt-views-total').textContent = fmtNum(data.totalViews);
+      document.getElementById('yt-videos-count').textContent = fmtNum(data.videoCount);
+      loadingEl.style.display = 'none';
+      document.getElementById('yt-quick-stats').style.display = 'flex';
+
+      // YPP subs progress
+      const subsPct = Math.min(100, Math.round((data.subscribers / 1000) * 100));
+      document.getElementById('ypp-subs-val').textContent = data.subscribers.toLocaleString('es-CL');
+      document.getElementById('ypp-subs-bar').style.width = subsPct + '%';
+      document.getElementById('ypp-subs-bar').style.background = subsPct >= 100 ? '#22c55e' : subsPct >= 50 ? '#eab308' : '#f97316';
+      document.getElementById('ypp-subs-pct').textContent = subsPct + '% completado';
+      document.getElementById('ypp-section').style.display = 'block';
+
+      // Top video
+      if (data.topVideo) {
+        const tv = data.topVideo;
+        document.getElementById('yt-top-card').innerHTML = \`
+          <div class="yt-top-card">
+            \${tv.thumbnail ? \`<img class="yt-top-thumb" src="\${tv.thumbnail}" alt=""/>\` : \`<div class="yt-top-thumb"></div>\`}
+            <div class="yt-top-body">
+              <div class="yt-top-badge">🏅 Más visto del canal</div>
+              <div class="yt-top-title">\${tv.title}</div>
+              <div class="yt-top-meta">👁 \${fmtNum(tv.views)} vistas · 👍 \${fmtNum(tv.likes)} likes · \${fmtDate(tv.publishedAt)}</div>
+              <a class="btn-yt" href="\${tv.url}" target="_blank" style="margin-top:8px;width:fit-content;">▶ Ver video</a>
+            </div>
+          </div>\`;
+      }
+
+      // Recent videos
+      const listEl = document.getElementById('yt-video-list');
+      if (data.recentVideos && data.recentVideos.length > 0) {
+        listEl.innerHTML = data.recentVideos.map((v, i) => \`
+          <div class="yt-video-item">
+            <div class="yt-video-rank">\${i + 1}</div>
+            \${v.thumbnail ? \`<img class="yt-video-thumb" src="\${v.thumbnail}" alt=""/>\` : \`<div class="yt-video-thumb-placeholder">▶</div>\`}
+            <div class="yt-video-body">
+              <div class="yt-video-title">\${v.title}</div>
+              <div class="yt-video-meta">
+                <span>👁 \${fmtNum(v.views)}</span>
+                <span>👍 \${fmtNum(v.likes)}</span>
+                <span>\${fmtDate(v.publishedAt)}</span>
+              </div>
+            </div>
+            <a class="btn-yt" href="\${v.url}" target="_blank" style="flex-shrink:0;">▶</a>
+          </div>\`).join('');
+      }
+
+      // Avg views
+      if (data.avgViews) {
+        document.getElementById('yt-avg-val').textContent = fmtNum(data.avgViews);
+        document.getElementById('yt-avg-row').style.display = 'flex';
+      }
+
+      document.getElementById('yt-expanded-section').style.display = 'block';
+    } catch (err) {
+      loadingEl.innerHTML = \`<span style="color:#ef4444;">Error al cargar datos del canal.</span>\`;
+    }
+  }
+
+  function fmtNum(n) {
+    if (!n && n !== 0) return '—';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toLocaleString('es-CL');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 </script>
 </body>
 </html>`;
@@ -1579,6 +1834,81 @@ app.get('/usage', async (req, res) => {
 </script>
 </body>
 </html>`);
+});
+
+// ── GET /my-channel ───────────────────────────────────────────────────────────
+app.get('/my-channel', async (req, res) => {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'YOUTUBE_API_KEY no configurada.' });
+
+  try {
+    // 1. Resolve @marcia.nomada handle → channelId + basic stats
+    const chRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+      params: { part: 'id,snippet,statistics', forHandle: 'marcia.nomada', key: apiKey },
+    });
+    const channel = chRes.data.items && chRes.data.items[0];
+    if (!channel) return res.status(404).json({ error: 'Canal @marcia.nomada no encontrado.' });
+
+    const channelId = channel.id;
+    const stats = channel.statistics;
+    const subscribers = parseInt(stats.subscriberCount || 0, 10);
+    const totalViews = parseInt(stats.viewCount || 0, 10);
+    const videoCount = parseInt(stats.videoCount || 0, 10);
+    const avgViews = videoCount > 0 ? Math.round(totalViews / videoCount) : 0;
+
+    // 2. Fetch the 5 most recent videos (IDs)
+    const searchRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: { part: 'snippet', channelId, order: 'date', maxResults: 5, type: 'video', key: apiKey },
+    });
+    const searchItems = searchRes.data.items || [];
+    const recentIds = searchItems.map(i => i.id.videoId).join(',');
+
+    // 3. Fetch video stats for recent videos
+    let recentVideos = [];
+    if (recentIds) {
+      const vRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+        params: { part: 'snippet,statistics', id: recentIds, key: apiKey },
+      });
+      recentVideos = (vRes.data.items || []).map(v => ({
+        id: v.id,
+        title: v.snippet.title,
+        publishedAt: v.snippet.publishedAt,
+        thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || '',
+        views: parseInt(v.statistics.viewCount || 0, 10),
+        likes: parseInt(v.statistics.likeCount || 0, 10),
+        url: `https://www.youtube.com/watch?v=${v.id}`,
+      }));
+    }
+
+    // 4. Fetch top video by views (search by viewCount order)
+    const topRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: { part: 'snippet', channelId, order: 'viewCount', maxResults: 1, type: 'video', key: apiKey },
+    });
+    const topItem = topRes.data.items && topRes.data.items[0];
+    let topVideo = null;
+    if (topItem) {
+      const topVRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+        params: { part: 'snippet,statistics', id: topItem.id.videoId, key: apiKey },
+      });
+      const tv = topVRes.data.items && topVRes.data.items[0];
+      if (tv) {
+        topVideo = {
+          id: tv.id,
+          title: tv.snippet.title,
+          publishedAt: tv.snippet.publishedAt,
+          thumbnail: tv.snippet.thumbnails?.medium?.url || tv.snippet.thumbnails?.default?.url || '',
+          views: parseInt(tv.statistics.viewCount || 0, 10),
+          likes: parseInt(tv.statistics.likeCount || 0, 10),
+          url: `https://www.youtube.com/watch?v=${tv.id}`,
+        };
+      }
+    }
+
+    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo });
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    res.status(500).json({ error: msg });
+  }
 });
 
 // ── POST /analyze-pattern ─────────────────────────────────────────────────────
