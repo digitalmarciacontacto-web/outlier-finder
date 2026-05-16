@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -546,32 +546,34 @@ app.get('/', async (req, res) => {
       </div>
     </div>
 
-    <!-- Instagram placeholder -->
-    <div class="platform-card">
+    <!-- Instagram -->
+    <div class="platform-card" id="ig-card">
       <div class="platform-card-header">
         <div class="platform-icon ig-icon">📷</div>
         <div>
           <div class="platform-name">Instagram</div>
           <div class="platform-handle">@digital.marcia</div>
         </div>
+        <div class="platform-live-badge" id="ig-live-badge" style="display:none;">Live</div>
       </div>
-      <div class="platform-followers">1,730</div>
-      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
-      <button class="btn-connect" disabled>Conectar</button>
+      <div id="ig-followers" class="platform-followers">1,730</div>
+      <div id="ig-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
+      <button class="btn-connect" id="ig-connect-btn" onclick="connectMeta()">Conectar con Meta</button>
     </div>
 
-    <!-- Facebook placeholder -->
-    <div class="platform-card">
+    <!-- Facebook -->
+    <div class="platform-card" id="fb-card">
       <div class="platform-card-header">
         <div class="platform-icon fb-icon">f</div>
         <div>
           <div class="platform-name">Facebook</div>
           <div class="platform-handle">Digital.Marcia</div>
         </div>
+        <div class="platform-live-badge" id="fb-live-badge" style="display:none;">Live</div>
       </div>
-      <div class="platform-followers">1,500</div>
-      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
-      <button class="btn-connect" disabled>Conectar</button>
+      <div id="fb-followers" class="platform-followers">1,500</div>
+      <div id="fb-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
+      <button class="btn-connect" id="fb-connect-btn" onclick="connectMeta()">Conectar con Meta</button>
     </div>
 
     <!-- TikTok placeholder -->
@@ -1156,9 +1158,42 @@ app.get('/', async (req, res) => {
       }
 
       document.getElementById('yt-expanded-section').style.display = 'block';
+
+      // Meta: update IG + FB cards if connected
+      if (data.metaConnected) {
+        ['ig', 'fb'].forEach(p => {
+          document.getElementById(p + '-live-badge').style.display = '';
+          document.getElementById(p + '-connect-btn').textContent = '✓ Conectado';
+          document.getElementById(p + '-connect-btn').disabled = true;
+        });
+        if (data.instagramFollowers !== null) {
+          document.getElementById('ig-followers').textContent = fmtNum(data.instagramFollowers);
+          document.getElementById('ig-status').textContent = 'seguidores reales';
+        }
+        if (data.facebookFollowers !== null) {
+          document.getElementById('fb-followers').textContent = fmtNum(data.facebookFollowers);
+          document.getElementById('fb-status').textContent = 'seguidores reales';
+        }
+      } else {
+        const appId = '${process.env.META_APP_ID || ''}';
+        if (!appId) {
+          document.getElementById('ig-connect-btn').disabled = true;
+          document.getElementById('fb-connect-btn').disabled = true;
+          document.getElementById('ig-status').textContent = 'seguidores · Configurar META_APP_ID para conectar';
+          document.getElementById('fb-status').textContent = 'seguidores · Configurar META_APP_ID para conectar';
+        }
+      }
     } catch (err) {
       loadingEl.innerHTML = \`<span style="color:#ef4444;">Error al cargar datos del canal.</span>\`;
     }
+  }
+
+  function connectMeta() {
+    const appId = '${process.env.META_APP_ID || ''}';
+    if (!appId) return;
+    const redirectUri = encodeURIComponent(window.location.origin + '/meta-callback');
+    const scope = encodeURIComponent('pages_read_engagement,instagram_basic');
+    window.location.href = \`https://www.facebook.com/v19.0/dialog/oauth?client_id=\${appId}&redirect_uri=\${redirectUri}&scope=\${scope}&response_type=token\`;
   }
 
   function fmtNum(n) {
@@ -1968,10 +2003,119 @@ app.get('/my-channel', async (req, res) => {
       }
     }
 
-    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo });
+    // 5. Meta (Facebook + Instagram) — only if token is stored
+    let metaConnected = false;
+    let facebookFollowers = null;
+    let instagramFollowers = null;
+
+    const metaToken = await loadMetaToken();
+    if (metaToken) {
+      metaConnected = true;
+      try {
+        const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
+          params: { access_token: metaToken },
+        });
+        const pages = pagesRes.data.data || [];
+        const page = pages.find(p => /marcia/i.test(p.name)) || pages[0];
+        if (page) {
+          const pageRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
+            params: { fields: 'followers_count,instagram_business_account', access_token: page.access_token || metaToken },
+          });
+          facebookFollowers = pageRes.data.followers_count ?? null;
+          const igId = pageRes.data.instagram_business_account?.id;
+          if (igId) {
+            const igRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}`, {
+              params: { fields: 'followers_count', access_token: page.access_token || metaToken },
+            });
+            instagramFollowers = igRes.data.followers_count ?? null;
+          }
+        }
+      } catch (metaErr) {
+        console.error('Meta API error:', metaErr.response?.data?.error?.message || metaErr.message);
+      }
+    }
+
+    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo, metaConnected, facebookFollowers, instagramFollowers });
   } catch (err) {
     const msg = err.response?.data?.error?.message || err.message;
     res.status(500).json({ error: msg });
+  }
+});
+
+// ── GET /meta-callback ────────────────────────────────────────────────────────
+app.get('/meta-callback', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Conectando Meta…</title>
+  <style>
+    body { background: #0f0f0f; color: #e5e7eb; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; flex-direction: column; gap: 16px; }
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 32px 40px; text-align: center; max-width: 420px; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    p  { margin: 0; color: #9ca3af; font-size: 14px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid #2a2a2a; border-top-color: #6366f1; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .success { color: #4ade80; font-size: 32px; }
+    .err { color: #f87171; }
+    a { color: #818cf8; text-decoration: none; font-size: 14px; margin-top: 16px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="card" id="box">
+    <div class="spinner" id="spinner"></div>
+    <h2 id="title">Conectando con Meta…</h2>
+    <p id="msg">Guardando token de acceso…</p>
+  </div>
+  <script>
+    (async () => {
+      const hash = window.location.hash.slice(1);
+      const params = new URLSearchParams(hash);
+      const token = params.get('access_token');
+
+      if (!token) {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('title').textContent = '❌ Error';
+        document.getElementById('msg').textContent = 'No se encontró el token de acceso en la URL.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/meta-callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: token }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('title').innerHTML = '<span class="success">✅</span> Conectado exitosamente';
+          document.getElementById('msg').textContent = 'Token de Meta guardado. Puedes cerrar esta ventana.';
+          setTimeout(() => { window.location.href = '/'; }, 2500);
+        } else {
+          throw new Error(data.error || 'Error desconocido');
+        }
+      } catch (err) {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('title').textContent = '❌ Error';
+        document.getElementById('msg').innerHTML = '<span class="err">' + err.message + '</span>';
+      }
+    })();
+  </script>
+</body>
+</html>`);
+});
+
+// ── POST /meta-callback ───────────────────────────────────────────────────────
+app.post('/meta-callback', async (req, res) => {
+  const { access_token } = req.body;
+  if (!access_token) return res.status(400).json({ error: 'Falta access_token.' });
+  try {
+    await saveMetaToken(access_token);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

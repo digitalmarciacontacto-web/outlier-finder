@@ -115,6 +115,19 @@ async function loadChannels() {
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
+async function saveMetaToken(token) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set('meta:access_token', token);
+  return true;
+}
+
+async function loadMetaToken() {
+  const redis = getRedis();
+  if (!redis) return null;
+  return await redis.get('meta:access_token');
+}
+
 module.exports = {
   saveOutliersToRedis,
   loadOutliersFromRedis,
@@ -124,4 +137,6 @@ module.exports = {
   getDailyTotals,
   saveChannels,
   loadChannels,
+  saveMetaToken,
+  loadMetaToken,
 };
