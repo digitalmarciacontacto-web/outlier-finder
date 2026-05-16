@@ -1175,13 +1175,19 @@ app.get('/', async (req, res) => {
           document.getElementById('fb-status').textContent = 'seguidores reales';
         }
       } else {
-        const appId = '${process.env.META_APP_ID || ''}';
-        if (!appId) {
-          document.getElementById('ig-connect-btn').disabled = true;
-          document.getElementById('fb-connect-btn').disabled = true;
-          document.getElementById('ig-status').textContent = 'seguidores · Configurar META_APP_ID para conectar';
-          document.getElementById('fb-status').textContent = 'seguidores · Configurar META_APP_ID para conectar';
-        }
+        // Fetch config to get Meta App ID
+        try {
+          const cfgRes = await fetch('/config');
+          const cfg = await cfgRes.json();
+          if (cfg.metaAppId) {
+            window._metaAppId = cfg.metaAppId;
+          } else {
+            document.getElementById('ig-connect-btn').disabled = true;
+            document.getElementById('fb-connect-btn').disabled = true;
+            document.getElementById('ig-status').textContent = 'seguidores \xB7 Configurar META_APP_ID para conectar';
+            document.getElementById('fb-status').textContent = 'seguidores \xB7 Configurar META_APP_ID para conectar';
+          }
+        } catch (_) {}
       }
     } catch (err) {
       loadingEl.innerHTML = \`<span style="color:#ef4444;">Error al cargar datos del canal.</span>\`;
@@ -1189,11 +1195,11 @@ app.get('/', async (req, res) => {
   }
 
   function connectMeta() {
-    const appId = '${process.env.META_APP_ID || ''}';
+    const appId = window._metaAppId;
     if (!appId) return;
-    const redirectUri = encodeURIComponent(window.location.origin + '/meta-callback');
-    const scope = encodeURIComponent('pages_read_engagement,instagram_basic');
-    window.location.href = \`https://www.facebook.com/v19.0/dialog/oauth?client_id=\${appId}&redirect_uri=\${redirectUri}&scope=\${scope}&response_type=token\`;
+    const redirectUri = encodeURIComponent('https://outlier-finder-production-4085.up.railway.app/meta-callback');
+    const scope = encodeURIComponent('pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights');
+    window.location.href = \`https://www.facebook.com/dialog/oauth?client_id=\${appId}&redirect_uri=\${redirectUri}&scope=\${scope}&response_type=token\`;
   }
 
   function fmtNum(n) {
@@ -2040,6 +2046,11 @@ app.get('/my-channel', async (req, res) => {
     const msg = err.response?.data?.error?.message || err.message;
     res.status(500).json({ error: msg });
   }
+});
+
+// ── GET /config ───────────────────────────────────────────────────────────────
+app.get('/config', (req, res) => {
+  res.json({ metaAppId: process.env.META_APP_ID || null });
 });
 
 // ── GET /meta-callback ────────────────────────────────────────────────────────
