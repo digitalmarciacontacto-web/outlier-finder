@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -578,7 +578,7 @@ app.get('/', async (req, res) => {
       <button class="btn-connect" id="fb-connect-btn" onclick="connectMeta()">Conectar con Meta</button>
     </div>
 
-    <!-- TikTok placeholder -->
+    <!-- TikTok -->
     <div class="platform-card">
       <div class="platform-card-header">
         <div class="platform-icon tt-icon">♪</div>
@@ -586,10 +586,11 @@ app.get('/', async (req, res) => {
           <div class="platform-name">TikTok</div>
           <div class="platform-handle">@marcia.nomada</div>
         </div>
+        <div class="platform-live-badge" id="tt-live-badge" style="display:none;">Live</div>
       </div>
-      <div class="platform-followers">241</div>
-      <div class="platform-status-msg">seguidores · Conectar API próximamente</div>
-      <button class="btn-connect" disabled>Conectar</button>
+      <div id="tt-followers" class="platform-followers">241</div>
+      <div id="tt-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
+      <button class="btn-connect active" id="tt-connect-btn" onclick="window.location.href='/tiktok-auth'">Conectar</button>
     </div>
 
   </div>
@@ -1160,6 +1161,19 @@ app.get('/', async (req, res) => {
       }
 
       document.getElementById('yt-expanded-section').style.display = 'block';
+
+      // TikTok: update card if connected
+      if (data.tiktokConnected) {
+        document.getElementById('tt-live-badge').style.display = '';
+        const ttBtn = document.getElementById('tt-connect-btn');
+        ttBtn.textContent = '✓ Conectado';
+        ttBtn.disabled = true;
+        ttBtn.classList.remove('active');
+        if (data.tiktokFollowers !== null) {
+          document.getElementById('tt-followers').textContent = fmtNum(data.tiktokFollowers);
+          document.getElementById('tt-status').textContent = 'seguidores reales';
+        }
+      }
 
       // Meta: update IG + FB cards if connected
       if (data.metaConnected) {
@@ -2046,7 +2060,24 @@ app.get('/my-channel', async (req, res) => {
       }
     }
 
-    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo, metaConnected, facebookFollowers, instagramFollowers });
+    // 6. TikTok — only if token is stored
+    let tiktokFollowers = null;
+    let tiktokConnected = false;
+    const ttToken = await loadTikTokToken();
+    if (ttToken) {
+      tiktokConnected = true;
+      try {
+        const ttRes = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
+          params: { fields: 'follower_count,like_count,video_count' },
+          headers: { Authorization: `Bearer ${ttToken}` },
+        });
+        tiktokFollowers = ttRes.data.data?.user?.follower_count ?? null;
+      } catch (ttErr) {
+        console.error('TikTok API error:', ttErr.response?.data?.error?.message || ttErr.message);
+      }
+    }
+
+    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo, metaConnected, facebookFollowers, instagramFollowers, tiktokConnected, tiktokFollowers });
   } catch (err) {
     const msg = err.response?.data?.error?.message || err.message;
     res.status(500).json({ error: msg });
@@ -2061,6 +2092,62 @@ app.get('/terms', (req, res) => {
 // ── GET /privacy ──────────────────────────────────────────────────────────────
 app.get('/privacy', (req, res) => {
   res.type('text/html').send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Privacy Policy</title><style>body{font-family:system-ui,sans-serif;max-width:600px;margin:60px auto;padding:0 24px;color:#111;line-height:1.6}h1{font-size:22px}</style></head><body><h1>Digital Marcia Content Studio — Privacy Policy</h1><p>This app collects no user data. It is used solely by the account owner to view their own social media metrics.</p></body></html>`);
+});
+
+// ── GET /tiktok-auth ──────────────────────────────────────────────────────────
+app.get('/tiktok-auth', (req, res) => {
+  const clientKey = process.env.TIKTOK_CLIENT_KEY;
+  if (!clientKey) return res.status(500).send('TIKTOK_CLIENT_KEY no configurada.');
+  const redirectUri = encodeURIComponent('https://outlier-finder-production-4085.up.railway.app/tiktok-callback');
+  const scope = encodeURIComponent('user.info.basic,user.info.stats,video.list');
+  res.redirect(`https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&scope=${scope}&response_type=code&redirect_uri=${redirectUri}&state=random123`);
+});
+
+// ── GET /tiktok-callback ──────────────────────────────────────────────────────
+app.get('/tiktok-callback', async (req, res) => {
+  const { code, error, error_description } = req.query;
+  if (error) return res.status(400).send(`Error de TikTok: ${error_description || error}`);
+  if (!code) return res.status(400).send('No se recibió el código de autorización.');
+
+  const clientKey = process.env.TIKTOK_CLIENT_KEY;
+  const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
+  if (!clientKey || !clientSecret) return res.status(500).send('Credenciales de TikTok no configuradas.');
+
+  try {
+    const params = new URLSearchParams({
+      client_key: clientKey,
+      client_secret: clientSecret,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: 'https://outlier-finder-production-4085.up.railway.app/tiktok-callback',
+    });
+    const tokenRes = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    const accessToken = tokenRes.data.access_token;
+    if (!accessToken) throw new Error(JSON.stringify(tokenRes.data));
+    await saveTikTokToken(accessToken);
+    res.redirect('/?tiktok=connected');
+  } catch (err) {
+    const msg = err.response?.data?.error_description || err.response?.data?.error || err.message;
+    res.status(500).send(`Error al obtener token de TikTok: ${msg}`);
+  }
+});
+
+// ── GET /tiktok-data ──────────────────────────────────────────────────────────
+app.get('/tiktok-data', async (req, res) => {
+  const token = await loadTikTokToken();
+  if (!token) return res.status(404).json({ error: 'No hay token de TikTok guardado.' });
+  try {
+    const ttRes = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
+      params: { fields: 'follower_count,like_count,video_count' },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    res.json(ttRes.data.data?.user || {});
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    res.status(500).json({ error: msg });
+  }
 });
 
 // ── TikTok domain verification ────────────────────────────────────────────────

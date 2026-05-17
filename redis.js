@@ -115,6 +115,19 @@ async function loadChannels() {
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
+async function saveTikTokToken(token) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set('tiktok:access_token', token);
+  return true;
+}
+
+async function loadTikTokToken() {
+  const redis = getRedis();
+  if (!redis) return null;
+  return await redis.get('tiktok:access_token');
+}
+
 async function saveMetaToken(token) {
   const redis = getRedis();
   if (!redis) return false;
@@ -139,4 +152,6 @@ module.exports = {
   loadChannels,
   saveMetaToken,
   loadMetaToken,
+  saveTikTokToken,
+  loadTikTokToken,
 };
