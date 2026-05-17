@@ -393,7 +393,9 @@ app.get('/', async (req, res) => {
     .platform-live-badge { margin-left: auto; background: #052e16; color: #4ade80; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .05em; border: 1px solid #065f46; }
     .platform-followers { font-size: 28px; font-weight: 800; color: #e2e8f0; }
     .platform-status-msg { font-size: 12px; color: #4b5563; }
-    .btn-connect { background: #1f2937; color: #4b5563; border: 1px solid #374151; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: not-allowed; width: fit-content; opacity: .6; }
+    .btn-connect { background: #1f2937; color: #4b5563; border: 1px solid #374151; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: not-allowed; width: fit-content; opacity: .6; transition: all .15s; }
+    .btn-connect.active { background: #312e81; color: #c7d2fe; border-color: #4338ca; cursor: pointer; opacity: 1; }
+    .btn-connect.active:hover { background: #3730a3; }
     .yt-loading { display: flex; align-items: center; gap: 10px; color: #6b7280; font-size: 13px; }
     .yt-quick-stats { display: flex; gap: 16px; }
     .yt-qstat { display: flex; flex-direction: column; gap: 2px; }
@@ -1181,9 +1183,12 @@ app.get('/', async (req, res) => {
           const cfg = await cfgRes.json();
           if (cfg.metaAppId) {
             window._metaAppId = cfg.metaAppId;
+            ['ig-connect-btn', 'fb-connect-btn'].forEach(id => {
+              const btn = document.getElementById(id);
+              btn.disabled = false;
+              btn.classList.add('active');
+            });
           } else {
-            document.getElementById('ig-connect-btn').disabled = true;
-            document.getElementById('fb-connect-btn').disabled = true;
             document.getElementById('ig-status').textContent = 'seguidores \xB7 Configurar META_APP_ID para conectar';
             document.getElementById('fb-status').textContent = 'seguidores \xB7 Configurar META_APP_ID para conectar';
           }
