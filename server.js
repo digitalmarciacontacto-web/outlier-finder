@@ -2053,6 +2053,16 @@ app.get('/my-channel', async (req, res) => {
   }
 });
 
+// ── GET /terms ────────────────────────────────────────────────────────────────
+app.get('/terms', (req, res) => {
+  res.type('text/html').send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Terms of Service</title><style>body{font-family:system-ui,sans-serif;max-width:600px;margin:60px auto;padding:0 24px;color:#111;line-height:1.6}h1{font-size:22px}</style></head><body><h1>Digital Marcia Content Studio — Terms of Service</h1><p>This app is for personal use only by the account owner.</p></body></html>`);
+});
+
+// ── GET /privacy ──────────────────────────────────────────────────────────────
+app.get('/privacy', (req, res) => {
+  res.type('text/html').send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Privacy Policy</title><style>body{font-family:system-ui,sans-serif;max-width:600px;margin:60px auto;padding:0 24px;color:#111;line-height:1.6}h1{font-size:22px}</style></head><body><h1>Digital Marcia Content Studio — Privacy Policy</h1><p>This app collects no user data. It is used solely by the account owner to view their own social media metrics.</p></body></html>`);
+});
+
 // ── TikTok domain verification ────────────────────────────────────────────────
 app.get('/tiktokKJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg.txt', (req, res) => {
   res.type('text/plain').send('tiktok-developers-site-verification=KJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg');
