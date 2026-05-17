@@ -2053,6 +2053,11 @@ app.get('/my-channel', async (req, res) => {
   }
 });
 
+// ── TikTok domain verification ────────────────────────────────────────────────
+app.get('/tiktokKJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg.txt', (req, res) => {
+  res.type('text/plain').send('tiktok-developers-site-verification=KJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg');
+});
+
 // ── GET /config ───────────────────────────────────────────────────────────────
 app.get('/config', (req, res) => {
   res.json({ metaAppId: process.env.META_APP_ID || null });
