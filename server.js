@@ -1203,7 +1203,7 @@ app.get('/', async (req, res) => {
     const appId = window._metaAppId;
     if (!appId) return;
     const redirectUri = encodeURIComponent('https://outlier-finder-production-4085.up.railway.app/meta-callback');
-    const scope = encodeURIComponent('pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights');
+    const scope = encodeURIComponent('pages_show_list,pages_read_engagement');
     window.location.href = \`https://www.facebook.com/dialog/oauth?client_id=\${appId}&redirect_uri=\${redirectUri}&scope=\${scope}&response_type=token\`;
   }
 
