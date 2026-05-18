@@ -138,7 +138,8 @@ async function saveMetaToken(token) {
 async function loadMetaToken() {
   const redis = getRedis();
   if (!redis) return null;
-  return await redis.get('meta:access_token');
+  const val = await redis.get('meta:access_token');
+  return val || null;
 }
 
 module.exports = {

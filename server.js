@@ -2059,6 +2059,11 @@ app.get('/my-channel', async (req, res) => {
       } catch (metaErr) {
         const detail = metaErr.response?.data?.error?.message || metaErr.message;
         console.error('Meta API error:', detail);
+        // If token is expired/invalid, treat as not connected so the button re-enables
+        const code = metaErr.response?.data?.error?.code;
+        if (code === 190 || /expired|invalid/i.test(detail)) {
+          metaConnected = false;
+        }
       }
     }
 
@@ -2155,6 +2160,12 @@ app.get('/tiktok-data', async (req, res) => {
 // ── TikTok domain verification ────────────────────────────────────────────────
 app.get('/tiktokKJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg.txt', (req, res) => {
   res.type('text/plain').send('tiktok-developers-site-verification=KJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg');
+});
+
+// ── GET /meta-disconnect ──────────────────────────────────────────────────────
+app.get('/meta-disconnect', async (req, res) => {
+  await saveMetaToken('');
+  res.redirect('/?meta=disconnected');
 });
 
 // ── GET /meta-debug ───────────────────────────────────────────────────────────
