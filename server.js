@@ -2038,25 +2038,27 @@ app.get('/my-channel', async (req, res) => {
       metaConnected = true;
       try {
         const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
-          params: { access_token: metaToken },
+          params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' },
         });
         const pages = pagesRes.data.data || [];
         const page = pages.find(p => /marcia/i.test(p.name)) || pages[0];
         if (page) {
+          const pageToken = page.access_token || metaToken;
           const pageRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
-            params: { fields: 'followers_count,instagram_business_account', access_token: page.access_token || metaToken },
+            params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken },
           });
-          facebookFollowers = pageRes.data.followers_count ?? null;
+          facebookFollowers = pageRes.data.followers_count ?? pageRes.data.fan_count ?? null;
           const igId = pageRes.data.instagram_business_account?.id;
           if (igId) {
             const igRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}`, {
-              params: { fields: 'followers_count', access_token: page.access_token || metaToken },
+              params: { fields: 'followers_count,username', access_token: pageToken },
             });
             instagramFollowers = igRes.data.followers_count ?? null;
           }
         }
       } catch (metaErr) {
-        console.error('Meta API error:', metaErr.response?.data?.error?.message || metaErr.message);
+        const detail = metaErr.response?.data?.error?.message || metaErr.message;
+        console.error('Meta API error:', detail);
       }
     }
 
@@ -2153,6 +2155,34 @@ app.get('/tiktok-data', async (req, res) => {
 // ── TikTok domain verification ────────────────────────────────────────────────
 app.get('/tiktokKJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg.txt', (req, res) => {
   res.type('text/plain').send('tiktok-developers-site-verification=KJmA2tsjPNtAzupoJPtB75Mxs9UGG5kg');
+});
+
+// ── GET /meta-debug ───────────────────────────────────────────────────────────
+app.get('/meta-debug', async (req, res) => {
+  const token = await loadMetaToken();
+  if (!token) return res.json({ error: 'No hay token guardado en Redis.' });
+  try {
+    const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
+      params: { access_token: token, fields: 'id,name,access_token,followers_count,fan_count' },
+    });
+    const pages = pagesRes.data.data || [];
+    const results = await Promise.all(pages.map(async p => {
+      const pt = p.access_token || token;
+      const detail = await axios.get(`https://graph.facebook.com/v19.0/${p.id}`, {
+        params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pt },
+      }).then(r => r.data).catch(e => ({ error: e.response?.data?.error?.message || e.message }));
+      let ig = null;
+      if (detail.instagram_business_account?.id) {
+        ig = await axios.get(`https://graph.facebook.com/v19.0/${detail.instagram_business_account.id}`, {
+          params: { fields: 'followers_count,username', access_token: pt },
+        }).then(r => r.data).catch(e => ({ error: e.response?.data?.error?.message || e.message }));
+      }
+      return { page_id: p.id, page_name: p.name, ...detail, instagram: ig };
+    }));
+    res.json({ token_preview: token.slice(0, 20) + '...', pages: results });
+  } catch (err) {
+    res.json({ error: err.response?.data?.error?.message || err.message });
+  }
 });
 
 // ── GET /config ───────────────────────────────────────────────────────────────
