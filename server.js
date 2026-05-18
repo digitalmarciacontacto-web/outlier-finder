@@ -2260,10 +2260,28 @@ app.post('/meta-callback', async (req, res) => {
   const { access_token } = req.body;
   if (!access_token) return res.status(400).json({ error: 'Falta access_token.' });
   try {
-    await saveMetaToken(access_token);
+    const appId = process.env.META_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+    let tokenToSave = access_token;
+
+    // Exchange short-lived token (~1h) for long-lived token (~60 days)
+    if (appId && appSecret) {
+      const exchangeRes = await axios.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+        params: {
+          grant_type: 'fb_exchange_token',
+          client_id: appId,
+          client_secret: appSecret,
+          fb_exchange_token: access_token,
+        },
+      });
+      tokenToSave = exchangeRes.data.access_token || access_token;
+    }
+
+    await saveMetaToken(tokenToSave);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const detail = err.response?.data?.error?.message || err.message;
+    res.status(500).json({ error: detail });
   }
 });
 
