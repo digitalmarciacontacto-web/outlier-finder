@@ -2106,7 +2106,7 @@ app.get('/tiktok-auth', (req, res) => {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
   if (!clientKey) return res.status(500).send('TIKTOK_CLIENT_KEY no configurada.');
   const redirectUri = encodeURIComponent('https://outlier-finder-production-4085.up.railway.app/tiktok-callback');
-  const scope = encodeURIComponent('user.info.basic,user.info.stats,video.list');
+  const scope = encodeURIComponent('user.info.basic,user.info.stats');
   res.redirect(`https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&scope=${scope}&response_type=code&redirect_uri=${redirectUri}&state=random123`);
 });
 
