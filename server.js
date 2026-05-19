@@ -2114,7 +2114,7 @@ app.get('/tiktok-auth', (req, res) => {
 app.get('/tiktok-callback', async (req, res) => {
   const { code, error, error_description } = req.query;
   if (error) return res.status(400).send(`Error de TikTok: ${error_description || error}`);
-  if (!code) return res.status(400).send('No se recibió el código de autorización.');
+  if (!code) return res.status(400).send(`No se recibió el código de autorización.<br><br>Parámetros recibidos: <pre>${JSON.stringify(req.query, null, 2)}</pre>`);
 
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
   const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
