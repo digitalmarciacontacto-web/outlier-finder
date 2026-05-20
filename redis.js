@@ -142,6 +142,21 @@ async function loadMetaToken() {
   return val || null;
 }
 
+async function saveMetasActuals(data) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set('metas:actuals', JSON.stringify(data));
+  return true;
+}
+
+async function loadMetasActuals() {
+  const redis = getRedis();
+  if (!redis) return null;
+  const raw = await redis.get('metas:actuals');
+  if (!raw) return null;
+  return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
 module.exports = {
   saveOutliersToRedis,
   loadOutliersFromRedis,
@@ -155,4 +170,6 @@ module.exports = {
   loadMetaToken,
   saveTikTokToken,
   loadTikTokToken,
+  saveMetasActuals,
+  loadMetasActuals,
 };

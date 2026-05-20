@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -445,6 +445,41 @@ app.get('/', async (req, res) => {
       #app-header { padding: 0 16px; }
       .header-title { display: none; }
     }
+
+    /* ── METAS ── */
+    .metas-month-current { background: #1a1a1a; border: 1px solid #854d0e; border-radius: 14px; padding: 28px; margin-bottom: 24px; }
+    .metas-month-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+    .metas-month-name { font-size: 22px; font-weight: 800; color: #fbbf24; }
+    .metas-month-desc { font-size: 13px; color: #6b7280; }
+    .metas-month-days { margin-left: auto; font-size: 12px; color: #92400e; background: #292524; border-radius: 6px; padding: 3px 10px; font-weight: 700; }
+    .metas-future-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+    .metas-month-future { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; }
+    .metas-month-future .metas-month-name { font-size: 16px; color: #a78bfa; }
+    .metas-platform-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .metas-platform-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+    .metas-platform-name { font-size: 13px; color: #9ca3af; width: 90px; flex-shrink: 0; }
+    .metas-bar-wrap { flex: 1; background: #2a2a2a; border-radius: 4px; height: 6px; overflow: hidden; }
+    .metas-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+    .metas-bar-pct { font-size: 11px; color: #6b7280; width: 36px; text-align: right; flex-shrink: 0; }
+    .metas-actual-val { font-size: 13px; font-weight: 700; color: #e2e8f0; width: 64px; text-align: right; flex-shrink: 0; cursor: pointer; border-bottom: 1px dashed #374151; }
+    .metas-actual-val.api { border-bottom: none; cursor: default; color: #34d399; }
+    .metas-actual-input { width: 64px; background: #111; border: 1px solid #6366f1; border-radius: 4px; color: #e2e8f0; font-size: 13px; font-weight: 700; padding: 1px 4px; text-align: right; }
+    .metas-goal-val { font-size: 11px; color: #4b5563; width: 54px; flex-shrink: 0; }
+    .metas-income-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .metas-income-title { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
+    .metas-income-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .metas-income-month { }
+    .metas-income-month-name { font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
+    .metas-income-row { display: flex; align-items: center; gap: 6px; }
+    .metas-income-actual { font-size: 20px; font-weight: 800; color: #34d399; cursor: pointer; border-bottom: 1px dashed #374151; min-width: 40px; display: inline-block; }
+    .metas-income-input { width: 70px; background: #111; border: 1px solid #6366f1; border-radius: 4px; color: #34d399; font-size: 18px; font-weight: 800; padding: 2px 4px; }
+    .metas-income-goal { font-size: 13px; color: #6b7280; }
+    .metas-income-bar-wrap { background: #2a2a2a; border-radius: 4px; height: 4px; margin-top: 8px; overflow: hidden; }
+    .metas-income-bar-fill { height: 100%; border-radius: 4px; background: #34d399; transition: width .4s; }
+    .metas-golden-rule { background: #0f172a; border: 1px solid #1e3a5f; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; }
+    .metas-golden-title { font-size: 12px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+    .metas-golden-flow { font-size: 15px; color: #e2e8f0; font-weight: 600; letter-spacing: .02em; }
+    .metas-total-pill { display: inline-flex; align-items: center; gap: 8px; background: #052e16; border: 1px solid #065f46; border-radius: 10px; padding: 10px 20px; color: #4ade80; font-size: 16px; font-weight: 800; margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -458,6 +493,7 @@ app.get('/', async (req, res) => {
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
     <button class="nav-tab" data-section="canal" onclick="showSection('canal')">Mi Canal</button>
+    <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
@@ -639,6 +675,40 @@ app.get('/', async (req, res) => {
 
 </section>
 
+<!-- ── METAS ── -->
+<section id="section-metas" class="section">
+  <div class="section-header">
+    <h2 class="section-title">🎯 Metas 90 días</h2>
+  </div>
+
+  <!-- Current month (Mayo) -->
+  <div class="metas-month-current" id="metas-current-block">
+    <div class="metas-month-header">
+      <div class="metas-month-name" id="metas-cur-name">—</div>
+      <div class="metas-month-desc" id="metas-cur-desc"></div>
+      <div class="metas-month-days" id="metas-cur-days"></div>
+    </div>
+    <div id="metas-cur-platforms"></div>
+  </div>
+
+  <!-- Future months -->
+  <div class="metas-future-grid" id="metas-future-grid"></div>
+
+  <!-- Income -->
+  <div class="metas-income-card">
+    <div class="metas-income-title">💰 Meta de ingresos</div>
+    <div class="metas-income-grid" id="metas-income-grid"></div>
+  </div>
+
+  <!-- Golden rule -->
+  <div class="metas-golden-rule">
+    <div class="metas-golden-title">⭐ Regla de oro — orden de enfoque</div>
+    <div class="metas-golden-flow">Facebook → YouTube → Instagram → TikTok → Threads</div>
+    <div class="metas-total-pill">🎯 Total proyectado Mayo–Agosto: $1,375 USD</div>
+  </div>
+
+</section>
+
 <!-- ── REPURPOSER ── -->
 <section id="section-repurposer" class="section">
   <div class="section-header">
@@ -707,6 +777,7 @@ app.get('/', async (req, res) => {
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
     if (id === 'canal') loadCanal();
+    if (id === 'metas') loadMetas();
   }
 
   // ── Channel count ───────────────────────────────────────────────────────────
@@ -1232,6 +1303,177 @@ app.get('/', async (req, res) => {
     if (!iso) return '';
     const d = new Date(iso);
     return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  // ── Metas ──────────────────────────────────────────────────────────────────
+  let metasLoaded = false;
+  let metasActuals = {};
+
+  function metasFmt(n) { if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 1000) return (n/1000).toFixed(0)+'K'; return n.toLocaleString('es-CL'); }
+
+  const MONTHS = [
+    { name: 'Mayo', tag: 'mayo', days: 12, desc: 'estabilizar + publicar',
+      goals: { facebook: 2500, instagram: 1900, youtube: 110, tiktok: 350, threads: 550, mailerlite: 20, income: 25 } },
+    { name: 'Junio', tag: 'junio', days: 30, desc: 'consistencia + aceleración',
+      goals: { facebook: 5000, instagram: 3000, youtube: 200, tiktok: 1000, threads: 800, mailerlite: 100, income: 150 } },
+    { name: 'Julio', tag: 'julio', days: 30, desc: 'monetización múltiple + primer afiliado',
+      goals: { facebook: 10000, instagram: 6000, youtube: 400, tiktok: 3000, threads: 1500, mailerlite: 300, income: 400 } },
+    { name: 'Agosto', tag: 'agosto', days: 30, desc: 'escala + primer sponsorship',
+      goals: { facebook: 15000, instagram: 10000, youtube: 700, tiktok: 7000, threads: 2500, mailerlite: 600, income: 800 } },
+  ];
+
+  const PLATFORMS = [
+    { key: 'facebook', name: 'Facebook', icon: 'f', bg: '#1877f2', apiKey: false },
+    { key: 'instagram', name: 'Instagram', icon: '📷', bg: '#e1306c', apiKey: false },
+    { key: 'youtube', name: 'YouTube', icon: '▶', bg: '#ff0000', apiKey: true },
+    { key: 'tiktok', name: 'TikTok', icon: '♪', bg: '#010101', apiKey: false },
+    { key: 'threads', name: 'Threads', icon: '⊕', bg: '#000', apiKey: false },
+    { key: 'mailerlite', name: 'MailerLite', icon: '✉', bg: '#09c269', apiKey: false },
+  ];
+
+  function barColor(pct) {
+    if (pct >= 80) return '#22c55e';
+    if (pct >= 50) return '#eab308';
+    return '#ef4444';
+  }
+
+  function renderPlatforms(containerId, monthTag, goals, actuals, isCurrentMonth) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = PLATFORMS.map(p => {
+      const goal = goals[p.key];
+      const actual = actuals[p.key + '_' + monthTag] ?? actuals[p.key] ?? 0;
+      const pct = Math.min(100, Math.round((actual / goal) * 100));
+      const color = barColor(pct);
+      const isApi = p.apiKey;
+      const valHtml = isApi
+        ? \`<span class="metas-actual-val api" title="Dato en tiempo real">\${metasFmt(actual)}</span>\`
+        : \`<span class="metas-actual-val" title="Clic para editar" onclick="editActual('\${p.key}','\${monthTag}',\${actual},this)">\${metasFmt(actual)}</span>\`;
+      return \`
+        <div class="metas-platform-row">
+          <div class="metas-platform-icon" style="background:\${p.bg};color:#fff;">\${p.icon}</div>
+          <div class="metas-platform-name">\${p.name}</div>
+          \${valHtml}
+          <div class="metas-goal-val">/ \${metasFmt(goal)}</div>
+          <div class="metas-bar-wrap"><div class="metas-bar-fill" style="width:\${pct}%;background:\${color};"></div></div>
+          <div class="metas-bar-pct" style="color:\${color};">\${pct}%</div>
+        </div>\`;
+    }).join('');
+  }
+
+  function renderIncome(actuals) {
+    const el = document.getElementById('metas-income-grid');
+    if (!el) return;
+    el.innerHTML = MONTHS.map(m => {
+      const actual = actuals['income_' + m.tag] ?? 0;
+      const goal = m.goals.income;
+      const pct = Math.min(100, Math.round((actual / goal) * 100));
+      return \`
+        <div class="metas-income-month">
+          <div class="metas-income-month-name">\${m.name}</div>
+          <div class="metas-income-row">
+            <span class="metas-income-actual" onclick="editIncome('\${m.tag}',\${actual},this)">$\${actual}</span>
+            <span class="metas-income-goal">/ $\${goal} USD</span>
+          </div>
+          <div class="metas-income-bar-wrap">
+            <div class="metas-income-bar-fill" style="width:\${pct}%;"></div>
+          </div>
+        </div>\`;
+    }).join('');
+  }
+
+  function renderMetas(actuals) {
+    metasActuals = actuals;
+    const now = new Date();
+    const curMonthIdx = Math.max(0, Math.min(3, now.getMonth() - 4));
+    const cur = MONTHS[curMonthIdx];
+
+    // Current month
+    document.getElementById('metas-cur-name').textContent = cur.name;
+    document.getElementById('metas-cur-desc').textContent = cur.desc;
+    document.getElementById('metas-cur-days').textContent = cur.days + ' días restantes';
+    renderPlatforms('metas-cur-platforms', cur.tag, cur.goals, actuals, true);
+
+    // Future months
+    const futureEl = document.getElementById('metas-future-grid');
+    futureEl.innerHTML = '';
+    MONTHS.forEach((m, i) => {
+      if (i === curMonthIdx) return;
+      const div = document.createElement('div');
+      div.className = 'metas-month-future';
+      div.innerHTML = \`
+        <div class="metas-month-header" style="margin-bottom:14px;">
+          <div class="metas-month-name">\${m.name}</div>
+          <div class="metas-month-desc" style="font-size:11px;color:#6b7280;margin-left:8px;">\${m.desc}</div>
+        </div>
+        <div id="metas-fut-\${m.tag}"></div>\`;
+      futureEl.appendChild(div);
+      renderPlatforms('metas-fut-' + m.tag, m.tag, m.goals, actuals, false);
+    });
+
+    renderIncome(actuals);
+  }
+
+  async function loadMetas() {
+    if (metasLoaded) { renderMetas(metasActuals); return; }
+    metasLoaded = true;
+    try {
+      const res = await fetch('/metas-data');
+      const data = await res.json();
+      renderMetas(data);
+    } catch (err) {
+      document.getElementById('metas-current-block').innerHTML = '<p style="color:#ef4444;">Error al cargar metas.</p>';
+    }
+  }
+
+  async function saveActuals() {
+    try {
+      await fetch('/metas-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(metasActuals),
+      });
+    } catch (_) {}
+  }
+
+  function editActual(platform, monthTag, current, span) {
+    const key = platform + '_' + monthTag;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'metas-actual-input';
+    input.value = current;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    const commit = () => {
+      const val = parseInt(input.value, 10) || 0;
+      metasActuals[key] = val;
+      saveActuals();
+      metasLoaded = false;
+      loadMetas();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+  }
+
+  function editIncome(monthTag, current, span) {
+    const key = 'income_' + monthTag;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'metas-income-input';
+    input.value = current;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    const commit = () => {
+      const val = parseFloat(input.value) || 0;
+      metasActuals[key] = val;
+      saveActuals();
+      metasLoaded = false;
+      loadMetas();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
   }
 </script>
 </body>
@@ -2194,6 +2436,36 @@ app.get('/meta-debug', async (req, res) => {
   } catch (err) {
     res.json({ error: err.response?.data?.error?.message || err.message });
   }
+});
+
+// ── GET /metas-data ───────────────────────────────────────────────────────────
+app.get('/metas-data', async (req, res) => {
+  const [stored, channelData] = await Promise.all([
+    loadMetasActuals(),
+    (async () => {
+      const apiKey = process.env.YOUTUBE_API_KEY;
+      if (!apiKey) return null;
+      try {
+        const r = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+          params: { part: 'statistics', forHandle: 'marcia.nomada', key: apiKey },
+        });
+        const ch = r.data.items && r.data.items[0];
+        return ch ? parseInt(ch.statistics.subscriberCount || 0, 10) : null;
+      } catch { return null; }
+    })(),
+  ]);
+
+  const actuals = stored || {};
+  if (channelData !== null) actuals.youtube = channelData;
+  res.json(actuals);
+});
+
+// ── POST /metas-data ──────────────────────────────────────────────────────────
+app.post('/metas-data', async (req, res) => {
+  const data = req.body;
+  if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Payload inválido.' });
+  await saveMetasActuals(data);
+  res.json({ success: true });
 });
 
 // ── GET /config ───────────────────────────────────────────────────────────────
