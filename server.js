@@ -13,6 +13,7 @@ const systemPrompt = `${brandBlueprint}\n\nBANCO DE HISTORIAS REALES:\n${stories
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const OUTLIERS_FILE = path.join(__dirname, 'outliers.json');
 
@@ -166,6 +167,7 @@ app.get('/', async (req, res) => {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Digital Marcia — Content Studio</title>
+  <link rel="stylesheet" href="/calendario.css"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f0f0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
@@ -760,79 +762,60 @@ app.get('/', async (req, res) => {
 
 <!-- ── CALENDARIO ── -->
 <section id="section-calendario" class="section">
-  <div class="section-header">
-    <h2 class="section-title">📅 Calendario</h2>
-  </div>
-
-  <!-- Internal tabs -->
-  <div class="cal-tabs">
-    <button class="cal-tab active" data-cal="hoy" onclick="showCalTab('hoy',this)">📌 Hoy</button>
-    <button class="cal-tab" data-cal="semana" onclick="showCalTab('semana',this)">📆 Semana</button>
-    <button class="cal-tab" data-cal="banco" onclick="showCalTab('banco',this)">💡 Banco de ideas</button>
-  </div>
-
-  <!-- HOY -->
-  <div id="cal-hoy" class="cal-inner">
-    <div id="cal-hoy-date" style="font-size:13px;color:#6b7280;margin-bottom:16px;"></div>
-    <div id="cal-hoy-loading" style="display:flex;gap:8px;align-items:center;color:#6b7280;font-size:14px;"><div class="spinner"></div>Cargando...</div>
-    <div id="cal-hoy-pieces" style="display:none;"></div>
-  </div>
-
-  <!-- SEMANA -->
-  <div id="cal-semana" class="cal-inner" style="display:none;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <span style="font-size:13px;color:#6b7280;">Próximos 7 días</span>
-      <button class="btn-gen" id="plan-week-btn" onclick="planWeek()">✨ Planificar semana</button>
+  <div id="cal-module" class="cal-module">
+    <!-- toolbar -->
+    <div class="cal-toolbar">
+      <div class="cal-view-switcher">
+        <button class="cal-view-btn active" data-view="month" onclick="calSwitchView('month',this)">📅 Mes</button>
+        <button class="cal-view-btn" data-view="list" onclick="calSwitchView('list',this)">☰ Lista</button>
+        <button class="cal-view-btn" data-view="ideas" onclick="calSwitchView('ideas',this)">💡 Ideas</button>
+      </div>
+      <div class="cal-nav" id="cal-nav">
+        <button onclick="calPrevMonth()">‹</button>
+        <span id="cal-month-label"></span>
+        <button onclick="calNextMonth()">›</button>
+        <button onclick="calGoToday()">Hoy</button>
+      </div>
+      <div class="cal-platform-filters" id="cal-platform-filters"></div>
+      <button class="btn-gen" onclick="openPostModal()">+ Nuevo post</button>
     </div>
-    <div id="week-loading" style="display:none;gap:8px;align-items:center;color:#6b7280;font-size:14px;"><div class="spinner"></div>Generando plan...</div>
-    <div id="week-grid" class="week-grid"></div>
+    <!-- Stats bar -->
+    <div class="cal-stats-bar" id="cal-stats-bar"></div>
+    <!-- Main content area (month grid / list / ideas) -->
+    <div id="cal-content"></div>
   </div>
 
-  <!-- BANCO DE IDEAS -->
-  <div id="cal-banco" class="cal-inner" style="display:none;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <span style="font-size:13px;color:#6b7280;">Arrastra o mueve ideas entre columnas</span>
-      <button class="btn-gen" onclick="openIdeaModal()">+ Nueva idea</button>
-    </div>
-    <div class="idea-board">
-      <div class="idea-col">
-        <div class="idea-col-title">💡 Ideas</div>
-        <div id="ideas-col-ideas" class="idea-col-body"></div>
+  <!-- Post modal overlay -->
+  <div class="cal-modal-overlay" id="cal-modal-overlay" style="display:none;" onclick="if(event.target===this)closePostModal()">
+    <div class="cal-modal" id="cal-modal">
+      <div class="cal-modal-header">
+        <span id="cal-modal-title">Nuevo post</span>
+        <button onclick="closePostModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
       </div>
-      <div class="idea-col">
-        <div class="idea-col-title">🎬 En producción</div>
-        <div id="ideas-col-produccion" class="idea-col-body"></div>
+      <div class="cal-modal-split">
+        <div class="cal-modal-form" id="cal-modal-form"></div>
+        <div class="cal-modal-preview">
+          <div class="cal-preview-label">Preview</div>
+          <div class="cal-preview-card" id="cal-preview-card">
+            <div id="prev-hook" style="font-weight:700;margin-bottom:8px;"></div>
+            <div id="prev-body" style="font-size:14px;color:#9898b0;white-space:pre-wrap;"></div>
+            <div id="prev-cta" style="margin-top:8px;color:#6C63FF;font-size:13px;"></div>
+          </div>
+        </div>
       </div>
-      <div class="idea-col">
-        <div class="idea-col-title">✅ Listo para publicar</div>
-        <div id="ideas-col-listo" class="idea-col-body"></div>
-      </div>
+      <div class="cal-modal-footer" id="cal-modal-footer"></div>
     </div>
   </div>
 
-  <!-- New idea modal -->
-  <div id="idea-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
-    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:28px;width:min(480px,90vw);">
-      <h3 style="margin:0 0 20px;font-size:16px;color:#e2e8f0;">Nueva idea</h3>
-      <input id="idea-title-input" placeholder="Título o tema..." style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;"/>
-      <select id="idea-platform-input" style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
-        <option value="instagram">Instagram</option>
-        <option value="facebook">Facebook</option>
-        <option value="youtube">YouTube</option>
-        <option value="tiktok">TikTok</option>
-        <option value="threads">Threads</option>
-        <option value="youtube-short">YouTube Short</option>
-      </select>
-      <select id="idea-origin-input" style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
-        <option value="outlier">Outlier detectado</option>
-        <option value="historia">Historia propia</option>
-        <option value="comentario">Comentario de audiencia</option>
-      </select>
-      <textarea id="idea-notes-input" placeholder="Notas..." style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;height:80px;resize:vertical;box-sizing:border-box;margin-bottom:16px;"></textarea>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button onclick="closeIdeaModal()" style="background:#2a2a2a;border:none;color:#9ca3af;padding:8px 18px;border-radius:8px;cursor:pointer;">Cancelar</button>
-        <button onclick="saveNewIdea()" class="btn-gen">Guardar idea</button>
+  <!-- Idea modal overlay -->
+  <div class="cal-modal-overlay" id="idea-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaModal()">
+    <div class="cal-modal" id="idea-modal" style="max-width:480px;">
+      <div class="cal-modal-header">
+        <span id="idea-modal-title">Nueva idea</span>
+        <button onclick="closeIdeaModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
       </div>
+      <div style="padding:20px;" id="idea-modal-form"></div>
+      <div class="cal-modal-footer" id="idea-modal-footer"></div>
     </div>
   </div>
 
@@ -1607,21 +1590,11 @@ app.get('/', async (req, res) => {
   const DAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
-  let calendarioLoaded = false;
-
-  function showCalTab(tab, btn) {
-    document.querySelectorAll('.cal-inner').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.cal-tab').forEach(el => el.classList.remove('active'));
-    document.getElementById('cal-' + tab).style.display = 'block';
-    btn.classList.add('active');
-    if (tab === 'semana') loadWeek();
-  }
-
-  async function loadCalendario() {
-    if (calendarioLoaded) return;
-    calendarioLoaded = true;
-    loadCalHoy();
-    loadIdeas();
+  let calLoaded = false;
+  function loadCalendario() {
+    if (calLoaded) return;
+    calLoaded = true;
+    if (typeof initCalendario === 'function') initCalendario();
   }
 
   async function loadCalHoy() {
@@ -1873,6 +1846,7 @@ app.get('/', async (req, res) => {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
   }
 </script>
+<script src="/calendario.js"></script>
 </body>
 </html>`;
 
@@ -3221,6 +3195,132 @@ app.get('/usage-data', async (req, res) => {
     getDailyTotals(7),
   ]);
   res.json({ history, dailyTotals });
+});
+
+// ── Content Calendar API ──────────────────────────────────────────────────────
+const postsService = require('./postsService');
+const ideasService = require('./ideasService');
+
+// Posts API
+app.get('/api/posts', async (req, res) => {
+  try {
+    const { month } = req.query;
+    let data;
+    if (month) {
+      data = await postsService.getPostsByMonth(month);
+    } else {
+      data = await postsService.getAllPosts();
+    }
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/posts/:id', async (req, res) => {
+  try {
+    const data = await postsService.getPost(req.params.id);
+    if (!data) return res.json({ success: false, error: 'Not found' });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/posts', async (req, res) => {
+  try {
+    const data = await postsService.createPost(req.body);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/posts/:id', async (req, res) => {
+  try {
+    const data = await postsService.updatePost(req.params.id, req.body);
+    if (!data) return res.json({ success: false, error: 'Not found' });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/posts/:id', async (req, res) => {
+  try {
+    await postsService.deletePost(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/posts/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const data = await postsService.changeStatus(req.params.id, status);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/posts/:id/duplicate', async (req, res) => {
+  try {
+    const data = await postsService.duplicatePost(req.params.id);
+    if (!data) return res.json({ success: false, error: 'Not found' });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// Ideas API
+app.get('/api/ideas', async (req, res) => {
+  try {
+    const data = await ideasService.getAllIdeas();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ideas', async (req, res) => {
+  try {
+    const data = await ideasService.createIdea(req.body);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/ideas/:id', async (req, res) => {
+  try {
+    const data = await ideasService.updateIdea(req.params.id, req.body);
+    if (!data) return res.json({ success: false, error: 'Not found' });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/ideas/:id', async (req, res) => {
+  try {
+    await ideasService.deleteIdea(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ideas/:id/convert', async (req, res) => {
+  try {
+    const data = await ideasService.convertToPost(req.params.id);
+    if (!data) return res.json({ success: false, error: 'Not found' });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
 function startServer() {
