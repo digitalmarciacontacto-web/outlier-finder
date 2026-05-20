@@ -2,9 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals, saveCalendarEntry, loadCalendarDay, saveWeekPlan, loadWeekPlan, saveIdeas, loadIdeas } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -480,6 +481,53 @@ app.get('/', async (req, res) => {
     .metas-golden-title { font-size: 12px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
     .metas-golden-flow { font-size: 15px; color: #e2e8f0; font-weight: 600; letter-spacing: .02em; }
     .metas-total-pill { display: inline-flex; align-items: center; gap: 8px; background: #052e16; border: 1px solid #065f46; border-radius: 10px; padding: 10px 20px; color: #4ade80; font-size: 16px; font-weight: 800; margin-top: 16px; }
+
+    /* ── Calendario ── */
+    .cal-tabs { display: flex; flex-direction: row; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .cal-tab { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #9ca3af; font-size: 13px; font-weight: 600; padding: 8px 18px; cursor: pointer; transition: background .15s, color .15s; }
+    .cal-tab:hover { background: #2a2a2a; color: #e2e8f0; }
+    .cal-tab.active { background: #4f46e5; border-color: #6366f1; color: #fff; }
+    .cal-inner { display: block; }
+    .cal-piece { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+    .cal-piece-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .platform-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+    .platform-badge.fb { background: #1877f2; color: #fff; }
+    .platform-badge.ig { background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); color: #fff; }
+    .platform-badge.yt { background: #ef4444; color: #fff; }
+    .platform-badge.tt { background: #010101; color: #fff; border: 1px solid #333; }
+    .platform-badge.th { background: #000000; color: #fff; border: 1px solid #333; }
+    .platform-badge.ys { background: #ef4444; color: #fff; }
+    .cal-piece-format { font-size: 12px; color: #6b7280; }
+    .cal-piece-theme { font-size: 14px; color: #e2e8f0; font-weight: 600; margin-bottom: 12px; }
+    .cal-piece label { display: block; font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; margin-top: 10px; }
+    .cal-piece textarea { width: 100%; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px 14px; color: #e2e8f0; font-size: 13px; resize: vertical; box-sizing: border-box; font-family: inherit; }
+    .cal-piece-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+    .publish-btn { padding: 7px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .publish-btn.published { background: #065f46; color: #34d399; }
+    .publish-btn.pending { background: #2a2a2a; color: #9ca3af; }
+    .regen-btn { padding: 7px 14px; border-radius: 8px; border: 1px solid #4f46e5; background: transparent; color: #818cf8; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .regen-btn:hover { background: #1e1b4b; }
+    .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; overflow-x: auto; }
+    .week-day-col { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px; min-width: 120px; }
+    .week-day-name { font-size: 11px; color: #6366f1; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .week-day-date { font-size: 11px; color: #6b7280; margin-bottom: 10px; }
+    .week-piece-item { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; color: #e2e8f0; }
+    .week-piece-topic { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+    .idea-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .idea-col { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 16px; min-height: 200px; }
+    .idea-col-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 14px; }
+    .idea-col-body { display: flex; flex-direction: column; gap: 10px; }
+    .idea-card { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px 14px; }
+    .idea-card-title { font-size: 14px; color: #e2e8f0; font-weight: 600; margin-bottom: 6px; }
+    .idea-card-meta { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
+    .idea-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .idea-move-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid #2a2a2a; background: #1a1a1a; color: #9ca3af; font-size: 11px; cursor: pointer; }
+    .idea-move-btn:hover { background: #2a2a2a; color: #e2e8f0; }
+    .idea-del-btn { padding: 4px 8px; border-radius: 6px; border: 1px solid #7f1d1d; background: transparent; color: #f87171; font-size: 11px; cursor: pointer; }
+    @media (max-width: 768px) {
+      .idea-board { grid-template-columns: 1fr; }
+      .week-grid { grid-template-columns: repeat(2, 1fr); }
+    }
   </style>
 </head>
 <body>
@@ -494,6 +542,7 @@ app.get('/', async (req, res) => {
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
     <button class="nav-tab" data-section="canal" onclick="showSection('canal')">Mi Canal</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
+    <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
@@ -709,6 +758,86 @@ app.get('/', async (req, res) => {
 
 </section>
 
+<!-- ── CALENDARIO ── -->
+<section id="section-calendario" class="section">
+  <div class="section-header">
+    <h2 class="section-title">📅 Calendario</h2>
+  </div>
+
+  <!-- Internal tabs -->
+  <div class="cal-tabs">
+    <button class="cal-tab active" data-cal="hoy" onclick="showCalTab('hoy',this)">📌 Hoy</button>
+    <button class="cal-tab" data-cal="semana" onclick="showCalTab('semana',this)">📆 Semana</button>
+    <button class="cal-tab" data-cal="banco" onclick="showCalTab('banco',this)">💡 Banco de ideas</button>
+  </div>
+
+  <!-- HOY -->
+  <div id="cal-hoy" class="cal-inner">
+    <div id="cal-hoy-date" style="font-size:13px;color:#6b7280;margin-bottom:16px;"></div>
+    <div id="cal-hoy-loading" style="display:flex;gap:8px;align-items:center;color:#6b7280;font-size:14px;"><div class="spinner"></div>Cargando...</div>
+    <div id="cal-hoy-pieces" style="display:none;"></div>
+  </div>
+
+  <!-- SEMANA -->
+  <div id="cal-semana" class="cal-inner" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <span style="font-size:13px;color:#6b7280;">Próximos 7 días</span>
+      <button class="btn-gen" id="plan-week-btn" onclick="planWeek()">✨ Planificar semana</button>
+    </div>
+    <div id="week-loading" style="display:none;gap:8px;align-items:center;color:#6b7280;font-size:14px;"><div class="spinner"></div>Generando plan...</div>
+    <div id="week-grid" class="week-grid"></div>
+  </div>
+
+  <!-- BANCO DE IDEAS -->
+  <div id="cal-banco" class="cal-inner" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <span style="font-size:13px;color:#6b7280;">Arrastra o mueve ideas entre columnas</span>
+      <button class="btn-gen" onclick="openIdeaModal()">+ Nueva idea</button>
+    </div>
+    <div class="idea-board">
+      <div class="idea-col">
+        <div class="idea-col-title">💡 Ideas</div>
+        <div id="ideas-col-ideas" class="idea-col-body"></div>
+      </div>
+      <div class="idea-col">
+        <div class="idea-col-title">🎬 En producción</div>
+        <div id="ideas-col-produccion" class="idea-col-body"></div>
+      </div>
+      <div class="idea-col">
+        <div class="idea-col-title">✅ Listo para publicar</div>
+        <div id="ideas-col-listo" class="idea-col-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New idea modal -->
+  <div id="idea-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:28px;width:min(480px,90vw);">
+      <h3 style="margin:0 0 20px;font-size:16px;color:#e2e8f0;">Nueva idea</h3>
+      <input id="idea-title-input" placeholder="Título o tema..." style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;"/>
+      <select id="idea-platform-input" style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
+        <option value="instagram">Instagram</option>
+        <option value="facebook">Facebook</option>
+        <option value="youtube">YouTube</option>
+        <option value="tiktok">TikTok</option>
+        <option value="threads">Threads</option>
+        <option value="youtube-short">YouTube Short</option>
+      </select>
+      <select id="idea-origin-input" style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
+        <option value="outlier">Outlier detectado</option>
+        <option value="historia">Historia propia</option>
+        <option value="comentario">Comentario de audiencia</option>
+      </select>
+      <textarea id="idea-notes-input" placeholder="Notas..." style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;height:80px;resize:vertical;box-sizing:border-box;margin-bottom:16px;"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="closeIdeaModal()" style="background:#2a2a2a;border:none;color:#9ca3af;padding:8px 18px;border-radius:8px;cursor:pointer;">Cancelar</button>
+        <button onclick="saveNewIdea()" class="btn-gen">Guardar idea</button>
+      </div>
+    </div>
+  </div>
+
+</section>
+
 <!-- ── REPURPOSER ── -->
 <section id="section-repurposer" class="section">
   <div class="section-header">
@@ -778,6 +907,7 @@ app.get('/', async (req, res) => {
     if (id === 'uso') loadUso();
     if (id === 'canal') loadCanal();
     if (id === 'metas') loadMetas();
+    if (id === 'calendario') loadCalendario();
   }
 
   // ── Channel count ───────────────────────────────────────────────────────────
@@ -1433,6 +1563,273 @@ app.get('/', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(metasActuals),
       });
+    } catch (_) {}
+  }
+
+  // ── Calendario ──────────────────────────────────────────────────────────────
+  const CAL_SCHEDULE = {
+    1: [
+      { platform: 'tiktok', format: 'Reel', theme: '¿Sabías que en Egipto...?' },
+      { platform: 'instagram', format: 'Reel', theme: '¿Sabías que en Egipto...?' }
+    ],
+    2: [
+      { platform: 'youtube', format: 'Video largo', theme: 'Historia / cultura de Egipto' }
+    ],
+    3: [
+      { platform: 'facebook', format: 'Post nativo', theme: 'Info práctica con costos reales' },
+      { platform: 'instagram', format: 'Post', theme: 'Info práctica con costos reales' }
+    ],
+    4: [
+      { platform: 'youtube', format: 'Short', theme: 'Reciclado del martes' },
+      { platform: 'tiktok', format: 'Video', theme: 'Reciclado del martes' }
+    ],
+    5: [
+      { platform: 'tiktok', format: 'Reel', theme: 'Reflexión honesta anclada' },
+      { platform: 'instagram', format: 'Reel', theme: 'Reflexión honesta anclada' }
+    ],
+    6: [
+      { platform: 'facebook', format: 'Post nativo', theme: 'Curiosidad del lugar' }
+    ],
+    0: [
+      { platform: 'instagram', format: 'Stories', theme: 'Detrás de escenas (opcional)' }
+    ]
+  };
+
+  const PLATFORM_META = {
+    facebook: { icon: 'f', color: '#1877f2', label: 'Facebook', cls: 'fb' },
+    instagram: { icon: '📷', color: '#e1306c', label: 'Instagram', cls: 'ig' },
+    youtube: { icon: '▶', color: '#ef4444', label: 'YouTube', cls: 'yt' },
+    tiktok: { icon: '♪', color: '#ffffff', bg: '#010101', label: 'TikTok', cls: 'tt' },
+    threads: { icon: '◎', color: '#ffffff', bg: '#000000', label: 'Threads', cls: 'th' },
+    'youtube-short': { icon: '▶', color: '#ef4444', label: 'YT Short', cls: 'ys' },
+  };
+
+  const DAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+  let calendarioLoaded = false;
+
+  function showCalTab(tab, btn) {
+    document.querySelectorAll('.cal-inner').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.cal-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('cal-' + tab).style.display = 'block';
+    btn.classList.add('active');
+    if (tab === 'semana') loadWeek();
+  }
+
+  async function loadCalendario() {
+    if (calendarioLoaded) return;
+    calendarioLoaded = true;
+    loadCalHoy();
+    loadIdeas();
+  }
+
+  async function loadCalHoy() {
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const dayName = DAY_NAMES[now.getDay()];
+    const dateLabel = \`\${dayName}, \${now.getDate()} de \${MONTH_NAMES[now.getMonth()]} \${now.getFullYear()}\`;
+    document.getElementById('cal-hoy-date').textContent = dateLabel;
+    try {
+      const res = await fetch('/calendar/today');
+      const data = await res.json();
+      document.getElementById('cal-hoy-loading').style.display = 'none';
+      const container = document.getElementById('cal-hoy-pieces');
+      container.style.display = 'block';
+      if (!data.pieces || data.pieces.length === 0) {
+        container.innerHTML = '<p style="color:#6b7280;font-size:14px;">No hay contenido programado para hoy.</p>';
+        return;
+      }
+      container.innerHTML = data.pieces.map((p, i) => renderCalPiece(p, i)).join('');
+    } catch (err) {
+      document.getElementById('cal-hoy-loading').innerHTML = '<span style="color:#ef4444;">Error al cargar.</span>';
+    }
+  }
+
+  function renderCalPiece(piece, index) {
+    const pm = PLATFORM_META[piece.platform] || { icon: '?', label: piece.platform, cls: '' };
+    const published = piece.published ? 'published' : 'pending';
+    const publishLabel = piece.published ? '✅ Publicado' : '⬜ Marcar publicado';
+    const hook = (piece.hook || '').replace(/"/g, '&quot;');
+    const cta = (piece.cta || '').replace(/"/g, '&quot;');
+    return \`<div class="cal-piece" id="cal-piece-\${index}">
+      <div class="cal-piece-header">
+        <span class="platform-badge \${pm.cls}">\${pm.icon} \${pm.label}</span>
+        <span class="cal-piece-format">\${piece.format}</span>
+      </div>
+      <div class="cal-piece-theme">\${piece.theme}</div>
+      \${piece.topic ? \`<div style="font-size:12px;color:#818cf8;margin-bottom:10px;">📌 \${piece.topic}</div>\` : ''}
+      <label>Hook</label>
+      <textarea id="hook-\${index}" rows="2" placeholder="Escribe o genera un hook...">\${hook}</textarea>
+      <label>CTA</label>
+      <textarea id="cta-\${index}" rows="2" placeholder="Escribe o genera un CTA...">\${cta}</textarea>
+      <div class="cal-piece-actions">
+        <button class="publish-btn \${published}" onclick="togglePublish('\${piece.date}','\${piece.platform}',\${index})" id="pub-btn-\${index}">\${publishLabel}</button>
+        <button class="regen-btn" onclick="regenerateHook(\${index})">✨ Regenerar hook/CTA</button>
+      </div>
+    </div>\`;
+  }
+
+  async function togglePublish(date, platform, index) {
+    const btn = document.getElementById(\`pub-btn-\${index}\`);
+    const isPublished = btn.classList.contains('published');
+    const newState = !isPublished;
+    btn.classList.toggle('published', newState);
+    btn.classList.toggle('pending', !newState);
+    btn.textContent = newState ? '✅ Publicado' : '⬜ Marcar publicado';
+    const hook = document.getElementById(\`hook-\${index}\`).value;
+    const cta = document.getElementById(\`cta-\${index}\`).value;
+    fetch('/calendar/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, platform, index, published: newState, hook, cta }),
+    }).catch(() => {});
+  }
+
+  async function regenerateHook(index) {
+    const btn = document.querySelector(\`#cal-piece-\${index} .regen-btn\`);
+    const origText = btn.textContent;
+    btn.textContent = '⏳ Generando...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/calendar/regenerate-hook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index }),
+      });
+      const data = await res.json();
+      if (data.hook) document.getElementById(\`hook-\${index}\`).value = data.hook;
+      if (data.cta) document.getElementById(\`cta-\${index}\`).value = data.cta;
+    } catch (_) {}
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+
+  async function loadWeek() {
+    const grid = document.getElementById('week-grid');
+    if (grid.dataset.loaded) return;
+    grid.dataset.loaded = '1';
+    try {
+      const res = await fetch('/calendar/week');
+      const data = await res.json();
+      if (!data.days) return;
+      grid.innerHTML = data.days.map(day => {
+        const pieces = (day.pieces || []).map(p => {
+          const pm = PLATFORM_META[p.platform] || { icon: '?', label: p.platform };
+          return \`<div class="week-piece-item"><span class="platform-badge \${(PLATFORM_META[p.platform]||{}).cls||''}" style="font-size:10px;padding:2px 6px;">\${pm.icon} \${pm.label}</span><div class="week-piece-topic">\${p.topic || p.theme}</div></div>\`;
+        }).join('');
+        return \`<div class="week-day-col"><div class="week-day-name">\${day.dayName}</div><div class="week-day-date">\${day.dateLabel}</div>\${pieces || '<div style="font-size:11px;color:#4b5563;">Descanso</div>'}</div>\`;
+      }).join('');
+    } catch (_) {
+      grid.innerHTML = '<p style="color:#ef4444;font-size:13px;">Error al cargar la semana.</p>';
+    }
+  }
+
+  async function planWeek() {
+    const btn = document.getElementById('plan-week-btn');
+    const loading = document.getElementById('week-loading');
+    btn.disabled = true;
+    loading.style.display = 'flex';
+    try {
+      const res = await fetch('/calendar/plan-week', { method: 'POST' });
+      const data = await res.json();
+      const grid = document.getElementById('week-grid');
+      grid.dataset.loaded = '';
+      await loadWeek();
+    } catch (_) {}
+    btn.disabled = false;
+    loading.style.display = 'none';
+  }
+
+  let _ideas = [];
+
+  async function loadIdeas() {
+    try {
+      const res = await fetch('/ideas');
+      const data = await res.json();
+      _ideas = data.ideas || [];
+      renderIdeas(_ideas);
+    } catch (_) {}
+  }
+
+  function renderIdeas(ideas) {
+    const cols = { ideas: [], produccion: [], listo: [] };
+    ideas.forEach(idea => {
+      const col = idea.column || 'ideas';
+      if (cols[col]) cols[col].push(idea);
+    });
+    Object.keys(cols).forEach(col => {
+      const el = document.getElementById(\`ideas-col-\${col}\`);
+      if (!el) return;
+      if (cols[col].length === 0) {
+        el.innerHTML = '<p style="font-size:12px;color:#4b5563;">Sin ideas aún.</p>';
+        return;
+      }
+      el.innerHTML = cols[col].map(idea => {
+        const pm = PLATFORM_META[idea.platform] || { icon: '?', label: idea.platform, cls: '' };
+        const moveButtons = Object.keys(cols).filter(c => c !== col).map(c => {
+          const labels = { ideas: '💡 Ideas', produccion: '🎬 Producción', listo: '✅ Listo' };
+          return \`<button class="idea-move-btn" onclick="moveIdea('\${idea.id}','\${c}')">\${labels[c]}</button>\`;
+        }).join('');
+        return \`<div class="idea-card">
+          <div class="idea-card-title">\${idea.title}</div>
+          <div class="idea-card-meta"><span class="platform-badge \${pm.cls}" style="font-size:10px;padding:2px 6px;">\${pm.icon} \${pm.label}</span> · \${idea.origin}</div>
+          \${idea.notes ? \`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px;">\${idea.notes}</div>\` : ''}
+          <div class="idea-card-actions">\${moveButtons}<button class="idea-del-btn" onclick="deleteIdea('\${idea.id}')">🗑</button></div>
+        </div>\`;
+      }).join('');
+    });
+  }
+
+  async function moveIdea(id, newCol) {
+    try {
+      await fetch(\`/ideas/\${id}\`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ column: newCol }),
+      });
+      const idea = _ideas.find(i => i.id === id);
+      if (idea) idea.column = newCol;
+      renderIdeas(_ideas);
+    } catch (_) {}
+  }
+
+  async function deleteIdea(id) {
+    try {
+      await fetch(\`/ideas/\${id}\`, { method: 'DELETE' });
+      _ideas = _ideas.filter(i => i.id !== id);
+      renderIdeas(_ideas);
+    } catch (_) {}
+  }
+
+  function openIdeaModal() {
+    const overlay = document.getElementById('idea-modal-overlay');
+    overlay.style.display = 'flex';
+  }
+
+  function closeIdeaModal() {
+    const overlay = document.getElementById('idea-modal-overlay');
+    overlay.style.display = 'none';
+    document.getElementById('idea-title-input').value = '';
+    document.getElementById('idea-notes-input').value = '';
+  }
+
+  async function saveNewIdea() {
+    const title = document.getElementById('idea-title-input').value.trim();
+    if (!title) return;
+    const platform = document.getElementById('idea-platform-input').value;
+    const origin = document.getElementById('idea-origin-input').value;
+    const notes = document.getElementById('idea-notes-input').value.trim();
+    try {
+      const res = await fetch('/ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, platform, origin, notes }),
+      });
+      const data = await res.json();
+      _ideas = data.ideas || _ideas;
+      renderIdeas(_ideas);
+      closeIdeaModal();
     } catch (_) {}
   }
 
@@ -2565,6 +2962,233 @@ app.post('/meta-callback', async (req, res) => {
   } catch (err) {
     const detail = err.response?.data?.error?.message || err.message;
     res.status(500).json({ error: detail });
+  }
+});
+
+// ── Calendar schedule (server-side copy) ──────────────────────────────────────
+const CAL_SCHEDULE_SERVER = {
+  1: [
+    { platform: 'tiktok', format: 'Reel', theme: '¿Sabías que en Egipto...?' },
+    { platform: 'instagram', format: 'Reel', theme: '¿Sabías que en Egipto...?' },
+  ],
+  2: [
+    { platform: 'youtube', format: 'Video largo', theme: 'Historia / cultura de Egipto' },
+  ],
+  3: [
+    { platform: 'facebook', format: 'Post nativo', theme: 'Info práctica con costos reales' },
+    { platform: 'instagram', format: 'Post', theme: 'Info práctica con costos reales' },
+  ],
+  4: [
+    { platform: 'youtube', format: 'Short', theme: 'Reciclado del martes' },
+    { platform: 'tiktok', format: 'Video', theme: 'Reciclado del martes' },
+  ],
+  5: [
+    { platform: 'tiktok', format: 'Reel', theme: 'Reflexión honesta anclada' },
+    { platform: 'instagram', format: 'Reel', theme: 'Reflexión honesta anclada' },
+  ],
+  6: [
+    { platform: 'facebook', format: 'Post nativo', theme: 'Curiosidad del lugar' },
+  ],
+  0: [
+    { platform: 'instagram', format: 'Stories', theme: 'Detrás de escenas (opcional)' },
+  ],
+};
+
+// ── GET /calendar/today ───────────────────────────────────────────────────────
+app.get('/calendar/today', async (req, res) => {
+  try {
+    const now = new Date();
+    const dow = now.getDay();
+    const dateStr = now.toISOString().split('T')[0];
+    const schedule = CAL_SCHEDULE_SERVER[dow] || [];
+    const pieces = await Promise.all(schedule.map(async (item, i) => {
+      const key = `${item.platform}_${i}`;
+      const saved = await loadCalendarDay(dateStr);
+      const entry = (saved || []).find(e => e.key === key) || {};
+      return {
+        ...item,
+        date: dateStr,
+        index: i,
+        hook: entry.hook || '',
+        cta: entry.cta || '',
+        published: entry.published || false,
+        topic: entry.topic || '',
+      };
+    }));
+    res.json({ pieces, date: dateStr });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /calendar/publish ────────────────────────────────────────────────────
+app.post('/calendar/publish', async (req, res) => {
+  try {
+    const { date, platform, index, published, hook, cta } = req.body;
+    const key = `${platform}_${index}`;
+    await saveCalendarEntry(date, key, { key, platform, published, hook, cta, date });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /calendar/regenerate-hook ───────────────────────────────────────────
+app.post('/calendar/regenerate-hook', async (req, res) => {
+  const { index } = req.body;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+  try {
+    const now = new Date();
+    const dow = now.getDay();
+    const schedule = CAL_SCHEDULE_SERVER[dow] || [];
+    const piece = schedule[index] || { platform: 'instagram', format: 'Reel', theme: 'Vida nómada' };
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 256,
+      messages: [{
+        role: 'user',
+        content: `Genera un hook y CTA para un video de ${piece.platform} formato ${piece.format} sobre "${piece.theme}" basado en el plan semanal de Marcia (nómada digital en Egipto, su nicho: vida nómada sin romantizar). Responde SOLO con JSON: {"hook": "...", "cta": "..."}`,
+      }],
+    });
+    const text = message.content[0]?.text || '{}';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { hook: '', cta: '' };
+    trackUsage('calendar-regen', message.usage?.input_tokens || 0, message.usage?.output_tokens || 0).catch(() => {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /calendar/week ────────────────────────────────────────────────────────
+app.get('/calendar/week', async (req, res) => {
+  try {
+    const now = new Date();
+    const DAY_NAMES_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const MONTH_NAMES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const weekKey = now.toISOString().split('T')[0];
+    const savedPlan = await loadWeekPlan(weekKey);
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const dow = d.getDay();
+      const dateStr = d.toISOString().split('T')[0];
+      const schedule = CAL_SCHEDULE_SERVER[dow] || [];
+      const planDay = savedPlan ? savedPlan.find(p => p.date === dateStr) : null;
+      const pieces = schedule.map((item, idx) => ({
+        ...item,
+        topic: planDay ? (planDay.topics && planDay.topics[idx]) || '' : '',
+      }));
+      days.push({
+        date: dateStr,
+        dayName: DAY_NAMES_ES[dow],
+        dateLabel: `${d.getDate()} ${MONTH_NAMES_ES[d.getMonth()]}`,
+        pieces,
+      });
+    }
+    res.json({ days });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /calendar/plan-week ──────────────────────────────────────────────────
+app.post('/calendar/plan-week', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+  try {
+    let outlierTitles = [];
+    try {
+      const outlierData = await loadOutliersFromRedis();
+      outlierTitles = (outlierData?.results || []).slice(0, 5).map(r => r.title || r.videoTitle || '');
+    } catch (_) {}
+    const scheduleDesc = Object.entries(CAL_SCHEDULE_SERVER).map(([dow, items]) => {
+      const dayName = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][parseInt(dow)];
+      return `${dayName}: ${items.map(i => `${i.platform}/${i.format} (${i.theme})`).join(', ')}`;
+    }).join('\n');
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: `Eres el planificador de contenido de Marcia, nómada digital en Egipto. Nicho: vida nómada sin romantizar, viajes reales con costos reales.\n\nOutliers recientes (top 5):\n${outlierTitles.map((t,i) => `${i+1}. ${t}`).join('\n') || 'No disponibles'}\n\nHorario semanal:\n${scheduleDesc}\n\nGenera un plan de 7 días (a partir de hoy) con temas específicos para cada pieza. Responde con JSON array: [{"date":"YYYY-MM-DD","topics":["tema para pieza 0","tema para pieza 1"]},...] con exactamente 7 objetos.`,
+      }],
+    });
+    const text = message.content[0]?.text || '[]';
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const plan = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    const weekKey = new Date().toISOString().split('T')[0];
+    await saveWeekPlan(weekKey, plan);
+    trackUsage('calendar-plan-week', message.usage?.input_tokens || 0, message.usage?.output_tokens || 0).catch(() => {});
+    res.json({ ok: true, plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /ideas ────────────────────────────────────────────────────────────────
+app.get('/ideas', async (req, res) => {
+  try {
+    const ideas = await loadIdeas();
+    res.json({ ideas });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /ideas ───────────────────────────────────────────────────────────────
+app.post('/ideas', async (req, res) => {
+  try {
+    const { title, platform, origin, notes } = req.body;
+    if (!title) return res.status(400).json({ error: 'Falta title.' });
+    const ideas = await loadIdeas();
+    const newIdea = {
+      id: crypto.randomUUID(),
+      title,
+      platform: platform || 'instagram',
+      origin: origin || 'outlier',
+      notes: notes || '',
+      column: 'ideas',
+      createdAt: new Date().toISOString(),
+    };
+    ideas.push(newIdea);
+    await saveIdeas(ideas);
+    res.json({ ideas });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PUT /ideas/:id ────────────────────────────────────────────────────────────
+app.put('/ideas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const update = req.body;
+    const ideas = await loadIdeas();
+    const idx = ideas.findIndex(i => i.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Idea no encontrada.' });
+    ideas[idx] = { ...ideas[idx], ...update };
+    await saveIdeas(ideas);
+    res.json({ idea: ideas[idx] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /ideas/:id ─────────────────────────────────────────────────────────
+app.delete('/ideas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let ideas = await loadIdeas();
+    ideas = ideas.filter(i => i.id !== id);
+    await saveIdeas(ideas);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

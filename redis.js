@@ -157,6 +157,61 @@ async function loadMetasActuals() {
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
+// ── Calendar ──────────────────────────────────────────────────────────────────
+
+async function saveCalendarEntry(date, platform, data) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set(`calendar:${date}:${platform}`, JSON.stringify(data));
+  return true;
+}
+
+async function loadCalendarDay(date) {
+  const redis = getRedis();
+  if (!redis) return [];
+  // Scan keys matching calendar:{date}:*
+  try {
+    const keys = await redis.keys(`calendar:${date}:*`);
+    if (!keys || keys.length === 0) return [];
+    const values = await Promise.all(keys.map(k => redis.get(k)));
+    return values.map(v => (typeof v === 'string' ? JSON.parse(v) : v)).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function saveWeekPlan(weekKey, plan) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set(`calendar:week:${weekKey}`, JSON.stringify(plan));
+  return true;
+}
+
+async function loadWeekPlan(weekKey) {
+  const redis = getRedis();
+  if (!redis) return null;
+  const raw = await redis.get(`calendar:week:${weekKey}`);
+  if (!raw) return null;
+  return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
+// ── Ideas ────────────────────────────────────────────────────────────────────
+
+async function saveIdeas(ideas) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set('ideas:list', JSON.stringify(ideas));
+  return true;
+}
+
+async function loadIdeas() {
+  const redis = getRedis();
+  if (!redis) return [];
+  const raw = await redis.get('ideas:list');
+  if (!raw) return [];
+  return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
 module.exports = {
   saveOutliersToRedis,
   loadOutliersFromRedis,
@@ -172,4 +227,10 @@ module.exports = {
   loadTikTokToken,
   saveMetasActuals,
   loadMetasActuals,
+  saveCalendarEntry,
+  loadCalendarDay,
+  saveWeekPlan,
+  loadWeekPlan,
+  saveIdeas,
+  loadIdeas,
 };
