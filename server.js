@@ -1435,7 +1435,7 @@ app.get('/', async (req, res) => {
       goals: { facebook: 15000, instagram: 10000, youtube: 700, tiktok: 7000, threads: 2500, mailerlite: 600, income: 800 } },
   ];
 
-  const PLATFORMS = [
+  const METAS_PLATFORMS = [
     { key: 'facebook', name: 'Facebook', icon: 'f', bg: '#1877f2', apiKey: false },
     { key: 'instagram', name: 'Instagram', icon: '📷', bg: '#e1306c', apiKey: false },
     { key: 'youtube', name: 'YouTube', icon: '▶', bg: '#ff0000', apiKey: true },
@@ -1453,7 +1453,7 @@ app.get('/', async (req, res) => {
   function renderPlatforms(containerId, monthTag, goals, actuals, isCurrentMonth) {
     const el = document.getElementById(containerId);
     if (!el) return;
-    el.innerHTML = PLATFORMS.map(p => {
+    el.innerHTML = METAS_PLATFORMS.map(p => {
       const goal = goals[p.key];
       const actual = actuals[p.key + '_' + monthTag] ?? actuals[p.key] ?? 0;
       const pct = Math.min(100, Math.round((actual / goal) * 100));
@@ -1549,261 +1549,12 @@ app.get('/', async (req, res) => {
     } catch (_) {}
   }
 
-  // ── Calendario ──────────────────────────────────────────────────────────────
-  const CAL_SCHEDULE = {
-    1: [
-      { platform: 'tiktok', format: 'Reel', theme: '¿Sabías que en Egipto...?' },
-      { platform: 'instagram', format: 'Reel', theme: '¿Sabías que en Egipto...?' }
-    ],
-    2: [
-      { platform: 'youtube', format: 'Video largo', theme: 'Historia / cultura de Egipto' }
-    ],
-    3: [
-      { platform: 'facebook', format: 'Post nativo', theme: 'Info práctica con costos reales' },
-      { platform: 'instagram', format: 'Post', theme: 'Info práctica con costos reales' }
-    ],
-    4: [
-      { platform: 'youtube', format: 'Short', theme: 'Reciclado del martes' },
-      { platform: 'tiktok', format: 'Video', theme: 'Reciclado del martes' }
-    ],
-    5: [
-      { platform: 'tiktok', format: 'Reel', theme: 'Reflexión honesta anclada' },
-      { platform: 'instagram', format: 'Reel', theme: 'Reflexión honesta anclada' }
-    ],
-    6: [
-      { platform: 'facebook', format: 'Post nativo', theme: 'Curiosidad del lugar' }
-    ],
-    0: [
-      { platform: 'instagram', format: 'Stories', theme: 'Detrás de escenas (opcional)' }
-    ]
-  };
-
-  const PLATFORM_META = {
-    facebook: { icon: 'f', color: '#1877f2', label: 'Facebook', cls: 'fb' },
-    instagram: { icon: '📷', color: '#e1306c', label: 'Instagram', cls: 'ig' },
-    youtube: { icon: '▶', color: '#ef4444', label: 'YouTube', cls: 'yt' },
-    tiktok: { icon: '♪', color: '#ffffff', bg: '#010101', label: 'TikTok', cls: 'tt' },
-    threads: { icon: '◎', color: '#ffffff', bg: '#000000', label: 'Threads', cls: 'th' },
-    'youtube-short': { icon: '▶', color: '#ef4444', label: 'YT Short', cls: 'ys' },
-  };
-
-  const DAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-
+  // ── Calendario ────────────────────────────────────────────────────────────────
   let calLoaded = false;
   function loadCalendario() {
     if (calLoaded) return;
     calLoaded = true;
     if (typeof initCalendario === 'function') initCalendario();
-  }
-
-  async function loadCalHoy() {
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const dayName = DAY_NAMES[now.getDay()];
-    const dateLabel = \`\${dayName}, \${now.getDate()} de \${MONTH_NAMES[now.getMonth()]} \${now.getFullYear()}\`;
-    document.getElementById('cal-hoy-date').textContent = dateLabel;
-    try {
-      const res = await fetch('/calendar/today');
-      const data = await res.json();
-      document.getElementById('cal-hoy-loading').style.display = 'none';
-      const container = document.getElementById('cal-hoy-pieces');
-      container.style.display = 'block';
-      if (!data.pieces || data.pieces.length === 0) {
-        container.innerHTML = '<p style="color:#6b7280;font-size:14px;">No hay contenido programado para hoy.</p>';
-        return;
-      }
-      container.innerHTML = data.pieces.map((p, i) => renderCalPiece(p, i)).join('');
-    } catch (err) {
-      document.getElementById('cal-hoy-loading').innerHTML = '<span style="color:#ef4444;">Error al cargar.</span>';
-    }
-  }
-
-  function renderCalPiece(piece, index) {
-    const pm = PLATFORM_META[piece.platform] || { icon: '?', label: piece.platform, cls: '' };
-    const published = piece.published ? 'published' : 'pending';
-    const publishLabel = piece.published ? '✅ Publicado' : '⬜ Marcar publicado';
-    const hook = (piece.hook || '').replace(/"/g, '&quot;');
-    const cta = (piece.cta || '').replace(/"/g, '&quot;');
-    return \`<div class="cal-piece" id="cal-piece-\${index}">
-      <div class="cal-piece-header">
-        <span class="platform-badge \${pm.cls}">\${pm.icon} \${pm.label}</span>
-        <span class="cal-piece-format">\${piece.format}</span>
-      </div>
-      <div class="cal-piece-theme">\${piece.theme}</div>
-      \${piece.topic ? \`<div style="font-size:12px;color:#818cf8;margin-bottom:10px;">📌 \${piece.topic}</div>\` : ''}
-      <label>Hook</label>
-      <textarea id="hook-\${index}" rows="2" placeholder="Escribe o genera un hook...">\${hook}</textarea>
-      <label>CTA</label>
-      <textarea id="cta-\${index}" rows="2" placeholder="Escribe o genera un CTA...">\${cta}</textarea>
-      <div class="cal-piece-actions">
-        <button class="publish-btn \${published}" onclick="togglePublish('\${piece.date}','\${piece.platform}',\${index})" id="pub-btn-\${index}">\${publishLabel}</button>
-        <button class="regen-btn" onclick="regenerateHook(\${index})">✨ Regenerar hook/CTA</button>
-      </div>
-    </div>\`;
-  }
-
-  async function togglePublish(date, platform, index) {
-    const btn = document.getElementById(\`pub-btn-\${index}\`);
-    const isPublished = btn.classList.contains('published');
-    const newState = !isPublished;
-    btn.classList.toggle('published', newState);
-    btn.classList.toggle('pending', !newState);
-    btn.textContent = newState ? '✅ Publicado' : '⬜ Marcar publicado';
-    const hook = document.getElementById(\`hook-\${index}\`).value;
-    const cta = document.getElementById(\`cta-\${index}\`).value;
-    fetch('/calendar/publish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, platform, index, published: newState, hook, cta }),
-    }).catch(() => {});
-  }
-
-  async function regenerateHook(index) {
-    const btn = document.querySelector(\`#cal-piece-\${index} .regen-btn\`);
-    const origText = btn.textContent;
-    btn.textContent = '⏳ Generando...';
-    btn.disabled = true;
-    try {
-      const res = await fetch('/calendar/regenerate-hook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index }),
-      });
-      const data = await res.json();
-      if (data.hook) document.getElementById(\`hook-\${index}\`).value = data.hook;
-      if (data.cta) document.getElementById(\`cta-\${index}\`).value = data.cta;
-    } catch (_) {}
-    btn.textContent = origText;
-    btn.disabled = false;
-  }
-
-  async function loadWeek() {
-    const grid = document.getElementById('week-grid');
-    if (grid.dataset.loaded) return;
-    grid.dataset.loaded = '1';
-    try {
-      const res = await fetch('/calendar/week');
-      const data = await res.json();
-      if (!data.days) return;
-      grid.innerHTML = data.days.map(day => {
-        const pieces = (day.pieces || []).map(p => {
-          const pm = PLATFORM_META[p.platform] || { icon: '?', label: p.platform };
-          return \`<div class="week-piece-item"><span class="platform-badge \${(PLATFORM_META[p.platform]||{}).cls||''}" style="font-size:10px;padding:2px 6px;">\${pm.icon} \${pm.label}</span><div class="week-piece-topic">\${p.topic || p.theme}</div></div>\`;
-        }).join('');
-        return \`<div class="week-day-col"><div class="week-day-name">\${day.dayName}</div><div class="week-day-date">\${day.dateLabel}</div>\${pieces || '<div style="font-size:11px;color:#4b5563;">Descanso</div>'}</div>\`;
-      }).join('');
-    } catch (_) {
-      grid.innerHTML = '<p style="color:#ef4444;font-size:13px;">Error al cargar la semana.</p>';
-    }
-  }
-
-  async function planWeek() {
-    const btn = document.getElementById('plan-week-btn');
-    const loading = document.getElementById('week-loading');
-    btn.disabled = true;
-    loading.style.display = 'flex';
-    try {
-      const res = await fetch('/calendar/plan-week', { method: 'POST' });
-      const data = await res.json();
-      const grid = document.getElementById('week-grid');
-      grid.dataset.loaded = '';
-      await loadWeek();
-    } catch (_) {}
-    btn.disabled = false;
-    loading.style.display = 'none';
-  }
-
-  let _ideas = [];
-
-  async function loadIdeas() {
-    try {
-      const res = await fetch('/ideas');
-      const data = await res.json();
-      _ideas = data.ideas || [];
-      renderIdeas(_ideas);
-    } catch (_) {}
-  }
-
-  function renderIdeas(ideas) {
-    const cols = { ideas: [], produccion: [], listo: [] };
-    ideas.forEach(idea => {
-      const col = idea.column || 'ideas';
-      if (cols[col]) cols[col].push(idea);
-    });
-    Object.keys(cols).forEach(col => {
-      const el = document.getElementById(\`ideas-col-\${col}\`);
-      if (!el) return;
-      if (cols[col].length === 0) {
-        el.innerHTML = '<p style="font-size:12px;color:#4b5563;">Sin ideas aún.</p>';
-        return;
-      }
-      el.innerHTML = cols[col].map(idea => {
-        const pm = PLATFORM_META[idea.platform] || { icon: '?', label: idea.platform, cls: '' };
-        const moveButtons = Object.keys(cols).filter(c => c !== col).map(c => {
-          const labels = { ideas: '💡 Ideas', produccion: '🎬 Producción', listo: '✅ Listo' };
-          return \`<button class="idea-move-btn" onclick="moveIdea('\${idea.id}','\${c}')">\${labels[c]}</button>\`;
-        }).join('');
-        return \`<div class="idea-card">
-          <div class="idea-card-title">\${idea.title}</div>
-          <div class="idea-card-meta"><span class="platform-badge \${pm.cls}" style="font-size:10px;padding:2px 6px;">\${pm.icon} \${pm.label}</span> · \${idea.origin}</div>
-          \${idea.notes ? \`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px;">\${idea.notes}</div>\` : ''}
-          <div class="idea-card-actions">\${moveButtons}<button class="idea-del-btn" onclick="deleteIdea('\${idea.id}')">🗑</button></div>
-        </div>\`;
-      }).join('');
-    });
-  }
-
-  async function moveIdea(id, newCol) {
-    try {
-      await fetch(\`/ideas/\${id}\`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ column: newCol }),
-      });
-      const idea = _ideas.find(i => i.id === id);
-      if (idea) idea.column = newCol;
-      renderIdeas(_ideas);
-    } catch (_) {}
-  }
-
-  async function deleteIdea(id) {
-    try {
-      await fetch(\`/ideas/\${id}\`, { method: 'DELETE' });
-      _ideas = _ideas.filter(i => i.id !== id);
-      renderIdeas(_ideas);
-    } catch (_) {}
-  }
-
-  function openIdeaModal() {
-    const overlay = document.getElementById('idea-modal-overlay');
-    overlay.style.display = 'flex';
-  }
-
-  function closeIdeaModal() {
-    const overlay = document.getElementById('idea-modal-overlay');
-    overlay.style.display = 'none';
-    document.getElementById('idea-title-input').value = '';
-    document.getElementById('idea-notes-input').value = '';
-  }
-
-  async function saveNewIdea() {
-    const title = document.getElementById('idea-title-input').value.trim();
-    if (!title) return;
-    const platform = document.getElementById('idea-platform-input').value;
-    const origin = document.getElementById('idea-origin-input').value;
-    const notes = document.getElementById('idea-notes-input').value.trim();
-    try {
-      const res = await fetch('/ideas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, platform, origin, notes }),
-      });
-      const data = await res.json();
-      _ideas = data.ideas || _ideas;
-      renderIdeas(_ideas);
-      closeIdeaModal();
-    } catch (_) {}
   }
 
   function editActual(platform, monthTag, current, span) {
