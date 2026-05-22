@@ -212,6 +212,27 @@ async function loadIdeas() {
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
+// ── Published / Today ─────────────────────────────────────────────────────────
+
+async function savePublished(date, platform) {
+  const redis = getRedis();
+  if (!redis) return false;
+  await redis.set(`published:${date}:${platform}`, '1', { ex: 60 * 60 * 24 * 7 });
+  return true;
+}
+
+async function loadPublishedDay(date) {
+  const redis = getRedis();
+  if (!redis) return [];
+  try {
+    const keys = await redis.keys(`published:${date}:*`);
+    if (!keys || keys.length === 0) return [];
+    return keys.map(k => k.replace(`published:${date}:`, ''));
+  } catch (_) {
+    return [];
+  }
+}
+
 module.exports = {
   saveOutliersToRedis,
   loadOutliersFromRedis,
@@ -233,4 +254,6 @@ module.exports = {
   loadWeekPlan,
   saveIdeas,
   loadIdeas,
+  savePublished,
+  loadPublishedDay,
 };

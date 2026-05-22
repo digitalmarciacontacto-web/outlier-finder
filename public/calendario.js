@@ -6,6 +6,7 @@ const PLATFORM_ICONS = {
   youtube: '▶️',
   tiktok: '♪',
   threads: '◎',
+  pinterest: '📌',
 };
 
 const PLATFORM_COLORS = {
@@ -14,10 +15,13 @@ const PLATFORM_COLORS = {
   youtube: '#FF0000',
   tiktok: '#ffffff',
   threads: '#f0f0f5',
+  pinterest: '#E60023',
 };
 
-const PLATFORMS = ['facebook', 'instagram', 'youtube', 'tiktok', 'threads'];
-const CONTENT_TYPES = ['Reel', 'Carrusel', 'Story', 'Post estático', 'Video largo', 'Short', 'Thread'];
+const PLATFORMS = ['facebook', 'instagram', 'youtube', 'tiktok', 'threads', 'pinterest'];
+const FORMATS = ['Reel', 'Video largo', 'Short', 'Carrusel', 'Post texto', 'Story', 'Thread', 'Pin'];
+const CONTENT_PILLARS = ['🌍 Escenario', '🔄 Proceso', '💥 Tensión', '💑 Vida construida'];
+const CONTENT_TYPES = ['Reel', 'Carrusel', 'Story', 'Post estático', 'Video largo', 'Short', 'Thread', 'Pin'];
 const STATUSES = ['draft', 'scheduled', 'published'];
 const STATUS_LABELS = { draft: 'Borrador', scheduled: 'Programado', published: 'Publicado' };
 
@@ -420,10 +424,10 @@ function renderModalForm(post, defaultDate) {
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="cal-form-group">
-        <label class="cal-form-label">Tipo de contenido</label>
-        <select class="cal-form-select" id="pf-content-type">
+        <label class="cal-form-label">Formato</label>
+        <select class="cal-form-select" id="pf-format">
           <option value="">Seleccionar...</option>
-          ${CONTENT_TYPES.map(t => `<option value="${t}" ${p.contentType === t ? 'selected' : ''}>${t}</option>`).join('')}
+          ${FORMATS.map(f => `<option value="${f}" ${(p.format || p.contentType) === f ? 'selected' : ''}>${f}</option>`).join('')}
         </select>
       </div>
 
@@ -436,8 +440,27 @@ function renderModalForm(post, defaultDate) {
     </div>
 
     <div class="cal-form-group">
-      <label class="cal-form-label">Fecha programada</label>
-      <input class="cal-form-input" type="date" id="pf-date" value="${escAttr(scheduledDate)}"/>
+      <label class="cal-form-label">Pilar de contenido</label>
+      <select class="cal-form-select" id="pf-pillar">
+        <option value="">Sin pilar</option>
+        ${CONTENT_PILLARS.map(cp => `<option value="${cp}" ${p.pillar === cp ? 'selected' : ''}>${cp}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="cal-form-group">
+        <label class="cal-form-label">Fecha programada</label>
+        <input class="cal-form-input" type="date" id="pf-date" value="${escAttr(scheduledDate)}"/>
+      </div>
+      <div class="cal-form-group">
+        <label class="cal-form-label">Hora</label>
+        <input class="cal-form-input" type="time" id="pf-time" value="${escAttr(p.scheduledTime || '')}"/>
+      </div>
+    </div>
+
+    <div class="cal-form-group">
+      <label class="cal-form-label">Tema / Ángulo</label>
+      <input class="cal-form-input" id="pf-theme" placeholder="El tema o ángulo específico..." value="${escAttr(p.theme || '')}"/>
     </div>
 
     <div class="cal-form-group">
@@ -520,14 +543,19 @@ async function savePost() {
   });
 
   const dateVal = document.getElementById('pf-date') ? document.getElementById('pf-date').value : '';
-  const scheduledDate = dateVal ? dateVal + 'T12:00:00.000Z' : null;
+  const timeVal = document.getElementById('pf-time') ? document.getElementById('pf-time').value : '';
+  const scheduledDate = dateVal ? (dateVal + 'T' + (timeVal || '12:00') + ':00.000Z') : null;
 
   const data = {
     title: document.getElementById('pf-title') ? document.getElementById('pf-title').value.trim() : '',
     hook: document.getElementById('pf-hook') ? document.getElementById('pf-hook').value.trim() : '',
     body: document.getElementById('pf-body') ? document.getElementById('pf-body').value.trim() : '',
     cta: document.getElementById('pf-cta') ? document.getElementById('pf-cta').value.trim() : '',
-    contentType: document.getElementById('pf-content-type') ? document.getElementById('pf-content-type').value : '',
+    format: document.getElementById('pf-format') ? document.getElementById('pf-format').value : '',
+    contentType: document.getElementById('pf-format') ? document.getElementById('pf-format').value : '',
+    pillar: document.getElementById('pf-pillar') ? document.getElementById('pf-pillar').value : '',
+    theme: document.getElementById('pf-theme') ? document.getElementById('pf-theme').value.trim() : '',
+    scheduledTime: timeVal,
     status: document.getElementById('pf-status') ? document.getElementById('pf-status').value : 'draft',
     notes: document.getElementById('pf-notes') ? document.getElementById('pf-notes').value.trim() : '',
     platforms,

@@ -5,7 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
-const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals, saveCalendarEntry, loadCalendarDay, saveWeekPlan, loadWeekPlan, saveIdeas, loadIdeas } = require('./redis');
+const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals, saveCalendarEntry, loadCalendarDay, saveWeekPlan, loadWeekPlan, saveIdeas, loadIdeas, savePublished, loadPublishedDay } = require('./redis');
 
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
@@ -215,6 +215,25 @@ app.get('/', async (req, res) => {
     .btn-see-all:hover { background: #1e1b4b; border-color: #4f46e5; }
     .empty-state { text-align: center; padding: 60px 20px; color: #4b5563; font-size: 14px; }
 
+    /* ── Qué publicar hoy ── */
+    .hoy-pub-section { margin-top: 32px; }
+    .hoy-pub-title { font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
+    .hoy-pub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .hoy-pub-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; transition: border-color .2s; }
+    .hoy-pub-card:hover { border-color: #4f46e5; }
+    .hoy-pub-card.hoy-pub-done { background: #0d2a1a; border-color: #10b981; }
+    .hoy-pub-card-top { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .hoy-pub-platform { font-size: 11px; font-weight: 700; color: #fff; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; }
+    .hoy-pub-format { font-size: 12px; color: #9898b0; background: #252535; padding: 3px 8px; border-radius: 6px; }
+    .hoy-pub-pillar { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; border: 1px solid; background: transparent; }
+    .hoy-pub-theme { font-size: 15px; font-weight: 700; color: #e2e8f0; }
+    .hoy-pub-hook { font-size: 13px; color: #9898b0; line-height: 1.5; font-style: italic; }
+    .hoy-pub-cta { font-size: 12px; color: #6C63FF; }
+    .hoy-pub-btn { margin-top: 6px; background: #1e1b4b; border: 1px solid #4f46e5; color: #a78bfa; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .hoy-pub-btn:hover { background: #312e81; }
+    .hoy-pub-btn.hoy-pub-btn-done { background: #052e16; border-color: #10b981; color: #34d399; cursor: default; }
+    .hoy-pub-btn:disabled { opacity: .6; cursor: not-allowed; }
+
     /* ── OUTLIERS ── */
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
     .section-title { font-size: 20px; font-weight: 800; color: #e2e8f0; }
@@ -314,6 +333,33 @@ app.get('/', async (req, res) => {
     .post-chars { font-size: 11px; color: #4b5563; margin-bottom: 6px; }
     .btn-copy-post { background: #1a1a1a; color: #94a3b8; border: 1px solid #2a2a2a; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
     .btn-copy-post:hover { background: #2a2a2a; color: #e2e8f0; }
+
+    /* ── IDEAS KANBAN ── */
+    .kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+    .kanban-col { flex: 0 0 220px; background: #141414; border: 1px solid #2a2a2a; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 300px; }
+    .kanban-col-header { font-size: 13px; font-weight: 700; color: #a78bfa; margin-bottom: 4px; }
+    .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .kanban-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px; cursor: default; }
+    .kanban-card-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; line-height: 1.4; }
+    .kanban-card-meta { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
+    .kanban-card-pillar { font-size: 11px; color: #a78bfa; margin-bottom: 4px; }
+    .kanban-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .kanban-card-btn { font-size: 11px; padding: 4px 8px; border-radius: 5px; border: 1px solid #2a2a2a; background: #252535; color: #9898b0; cursor: pointer; font-weight: 600; transition: all .15s; white-space: nowrap; }
+    .kanban-card-btn:hover { background: #2a2a4a; color: #a78bfa; border-color: #4f46e5; }
+    .kanban-card-btn.move-btn { background: #1e1b4b; border-color: #4f46e5; color: #a78bfa; }
+    .kanban-card-btn.guion-btn { background: #0c1a0c; border-color: #10b981; color: #34d399; }
+    .kanban-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 900; display: flex; align-items: center; justify-content: center; }
+    .kanban-modal { background: #141420; border: 1px solid #2a2a3a; border-radius: 16px; width: 460px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .kanban-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 0; }
+    .kanban-modal-header span { font-size: 17px; font-weight: 700; color: #e2e8f0; }
+    .kanban-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+    .kanban-label { font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .kanban-input { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 14px; padding: 10px 12px; width: 100%; outline: none; font-family: inherit; transition: border-color .2s; resize: vertical; }
+    .kanban-input:focus { border-color: #6366f1; }
+    .kanban-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; }
+    .kanban-btn-cancel { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .kanban-btn-save { background: #4f46e5; border: none; color: #fff; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .kanban-btn-save:hover { background: #4338ca; }
 
     /* ── USO ── */
     .uso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
@@ -546,6 +592,7 @@ app.get('/', async (req, res) => {
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
+    <button class="nav-tab" data-section="ideas-kanban" onclick="showSection('ideas-kanban')">💡 Ideas</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
   <div class="header-cost" id="header-cost">💰 <strong>$${usage.today.toFixed(4)}</strong> hoy</div>
@@ -579,6 +626,14 @@ app.get('/', async (req, res) => {
   ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 del día</div>' : ''}
   ${featuredCardHtml}
   ${videos.length > 0 ? '<button class="btn-see-all" onclick="showSection(\'outliers\')">Ver todos los outliers →</button>' : ''}
+
+  <!-- ── Qué publicar hoy ── -->
+  <div class="hoy-pub-section">
+    <h3 class="hoy-pub-title">📅 Qué publicar hoy</h3>
+    <div class="hoy-pub-grid" id="hoy-pub-grid">
+      <div class="spinner" style="margin:auto;border-top-color:#6C63FF;"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ── OUTLIERS ── -->
@@ -826,7 +881,7 @@ app.get('/', async (req, res) => {
   <div class="section-header">
     <h2 class="section-title">♻️ Repurposer</h2>
   </div>
-  <p class="repurposer-desc">Convierte un guion o idea en 6 posts para Threads y X.</p>
+  <p class="repurposer-desc">Convierte un guion o idea en 6 posts para Threads, Facebook y Pinterest.</p>
   <textarea id="repurpose-input" class="repurposer-textarea" placeholder="Pega aquí el guion completo o el título del video que quieres convertir en posts..."></textarea>
   <br/>
   <button class="btn-repurpose" onclick="generatePosts()">⚡ Generar 6 posts</button>
@@ -835,6 +890,74 @@ app.get('/', async (req, res) => {
     <span>Generando posts con Claude...</span>
   </div>
   <div class="posts-grid" id="posts-grid"></div>
+</section>
+
+<!-- ── IDEAS KANBAN ── -->
+<section id="section-ideas-kanban" class="section">
+  <div class="section-header">
+    <h2 class="section-title">💡 Ideas</h2>
+    <button class="btn-gen" onclick="openIdeaKanbanModal()">+ Nueva idea</button>
+  </div>
+  <div class="kanban-board" id="kanban-board">
+    <div class="kanban-col" data-stage="idea">
+      <div class="kanban-col-header">💡 Idea</div>
+      <div class="kanban-cards" id="kanban-idea"></div>
+    </div>
+    <div class="kanban-col" data-stage="guion">
+      <div class="kanban-col-header">📝 Guión listo</div>
+      <div class="kanban-cards" id="kanban-guion"></div>
+    </div>
+    <div class="kanban-col" data-stage="filmado">
+      <div class="kanban-col-header">🎬 Filmado</div>
+      <div class="kanban-cards" id="kanban-filmado"></div>
+    </div>
+    <div class="kanban-col" data-stage="editado">
+      <div class="kanban-col-header">✂️ Editado</div>
+      <div class="kanban-cards" id="kanban-editado"></div>
+    </div>
+    <div class="kanban-col" data-stage="publicado">
+      <div class="kanban-col-header">✅ Publicado</div>
+      <div class="kanban-cards" id="kanban-publicado"></div>
+    </div>
+  </div>
+
+  <!-- Nueva idea modal -->
+  <div class="kanban-modal-overlay" id="kanban-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaKanbanModal()">
+    <div class="kanban-modal" id="kanban-modal">
+      <div class="kanban-modal-header">
+        <span id="kanban-modal-title">Nueva idea</span>
+        <button onclick="closeIdeaKanbanModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div class="kanban-modal-body">
+        <label class="kanban-label">Título *</label>
+        <input type="text" id="ki-title" class="kanban-input" placeholder="¿De qué trata tu idea?">
+        <label class="kanban-label">Pilar de contenido</label>
+        <select id="ki-pillar" class="kanban-input">
+          <option value="">Sin pilar</option>
+          <option value="🌍 Escenario">🌍 Escenario</option>
+          <option value="🔄 Proceso">🔄 Proceso</option>
+          <option value="💥 Tensión">💥 Tensión</option>
+          <option value="💑 Vida construida">💑 Vida construida</option>
+        </select>
+        <label class="kanban-label">Plataforma principal</label>
+        <select id="ki-platform" class="kanban-input">
+          <option value="">Sin plataforma</option>
+          <option value="YouTube">YouTube</option>
+          <option value="Instagram">Instagram</option>
+          <option value="TikTok">TikTok</option>
+          <option value="Threads">Threads</option>
+          <option value="Facebook">Facebook</option>
+          <option value="Pinterest">Pinterest</option>
+        </select>
+        <label class="kanban-label">Notas</label>
+        <textarea id="ki-notes" class="kanban-input" rows="3" placeholder="Contexto, referencias, ángulo..."></textarea>
+      </div>
+      <div class="kanban-modal-footer">
+        <button class="kanban-btn-cancel" onclick="closeIdeaKanbanModal()">Cancelar</button>
+        <button class="kanban-btn-save" onclick="saveIdeaKanban()">Guardar idea</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- ── USO ── -->
@@ -891,6 +1014,7 @@ app.get('/', async (req, res) => {
     if (id === 'canal') loadCanal();
     if (id === 'metas') loadMetas();
     if (id === 'calendario') loadCalendario();
+    if (id === 'ideas-kanban') loadKanban();
   }
 
   // ── Channel count ───────────────────────────────────────────────────────────
@@ -1119,14 +1243,19 @@ app.get('/', async (req, res) => {
             <div class="post-version">
               <div class="post-platform threads">Threads</div>
               <div class="post-text" id="pt-\${i}">\${post.threads}</div>
-              <div class="post-chars">\${post.threads.length} / 500 chars</div>
+              <div class="post-chars">\${(post.threads||'').length} / 500 chars</div>
               <button class="btn-copy-post" onclick="copyPost('pt-\${i}',this)">Copiar</button>
             </div>
             <div class="post-version">
-              <div class="post-platform x">X / Twitter</div>
-              <div class="post-text" id="px-\${i}">\${post.x}</div>
-              <div class="post-chars">\${post.x.length} / 280 chars</div>
-              <button class="btn-copy-post" onclick="copyPost('px-\${i}',this)">Copiar</button>
+              <div class="post-platform" style="background:#1877f2;">Facebook</div>
+              <div class="post-text" id="pfb-\${i}">\${post.facebook}</div>
+              <div class="post-chars">\${(post.facebook||'').length} chars</div>
+              <button class="btn-copy-post" onclick="copyPost('pfb-\${i}',this)">Copiar</button>
+            </div>
+            <div class="post-version">
+              <div class="post-platform" style="background:#e60023;">Pinterest</div>
+              <div class="post-text" id="pp-\${i}">\${post.pinterest_title ? '<strong>' + post.pinterest_title + '</strong><br>' + post.pinterest_desc : post.pinterest}</div>
+              <button class="btn-copy-post" onclick="copyPost('pp-\${i}',this)">Copiar</button>
             </div>
           </div>
         </div>\`).join('');
@@ -1555,6 +1684,264 @@ app.get('/', async (req, res) => {
     if (calLoaded) return;
     calLoaded = true;
     if (typeof initCalendario === 'function') initCalendario();
+  }
+
+  // ── Qué publicar hoy ──────────────────────────────────────────────────────────
+  const HOY_SCHEDULE = [
+    // Sunday=0
+    { day: 'Domingo', items: [
+      { platform: 'YouTube', format: 'Video largo', pillar: '🌍 Escenario', theme: 'Un día en [ciudad] siendo nómada digital', hook: '¿Cómo es realmente vivir y trabajar desde [ciudad]? Te lo cuento sin filtros.', cta: 'Suscríbete para más realidad nómada.' },
+      { platform: 'Instagram', format: 'Reel', pillar: '🔄 Proceso', theme: 'Mi setup de trabajo esta semana', hook: 'Esto es lo que necesito para trabajar desde cualquier lugar.', cta: 'Guarda este post si te sirve.' },
+    ]},
+    // Monday=1
+    { day: 'Lunes', items: [
+      { platform: 'Threads', format: 'Post texto', pillar: '💥 Tensión', theme: 'Lo que nadie te dice del trabajo remoto', hook: 'Semana nueva, misma verdad incómoda del trabajo remoto.', cta: '¿Con cuál te identificas? Cuéntame.' },
+      { platform: 'Instagram', format: 'Carrusel', pillar: '💑 Vida construida', theme: 'La semana en números', hook: '¿Cuánto cuesta vivir en [ciudad] este mes? Te doy los números reales.', cta: 'Guarda este carrusel para cuando planifiques.' },
+    ]},
+    // Tuesday=2
+    { day: 'Martes', items: [
+      { platform: 'Facebook', format: 'Post texto', pillar: '🔄 Proceso', theme: 'Cómo organizo mi semana siendo nómada', hook: 'Martes de productividad: así organizo mi semana trabajando desde cualquier lugar.', cta: '¿Tú cómo organizas tu tiempo remoto?' },
+      { platform: 'Pinterest', format: 'Post texto', pillar: '🌍 Escenario', theme: 'Guía práctica: vivir en [ciudad]', hook: 'Todo lo que necesitas saber antes de mudarte a [ciudad].', cta: 'Guarda este pin para tu próximo destino.' },
+    ]},
+    // Wednesday=3
+    { day: 'Miércoles', items: [
+      { platform: 'YouTube', format: 'Short', pillar: '💥 Tensión', theme: 'Un error que cometí siendo nómada', hook: '60 segundos de honestidad total sobre el nomadismo.', cta: 'Mira el video completo en el canal.' },
+      { platform: 'Instagram', format: 'Reel', pillar: '💥 Tensión', theme: 'La cara B del nomadismo', hook: 'Lo que no publican los nómadas digitales.', cta: 'Comenta si también lo viviste.' },
+    ]},
+    // Thursday=4
+    { day: 'Jueves', items: [
+      { platform: 'Threads', format: 'Post texto', pillar: '💑 Vida construida', theme: 'Reflexión de mitad de semana', hook: '¿Vale la pena sacrificar la estabilidad por la libertad? Mi respuesta honesta.', cta: '¿Y tú qué elegirías?' },
+      { platform: 'TikTok', format: 'Reel', pillar: '🔄 Proceso', theme: 'Un día en mi vida remota', hook: 'VLOG: un jueves trabajando desde [ciudad].', cta: 'Sígueme para más vida nómada real.' },
+    ]},
+    // Friday=5
+    { day: 'Viernes', items: [
+      { platform: 'Instagram', format: 'Carrusel', pillar: '🌍 Escenario', theme: '5 cosas que aprendí esta semana', hook: 'Viernes de recap: 5 aprendizajes de esta semana viajando y trabajando.', cta: 'Guarda para releerlo el próximo viernes.' },
+      { platform: 'Facebook', format: 'Post texto', pillar: '💑 Vida construida', theme: 'Mi semana en retrospectiva', hook: 'Cierre de semana: lo bueno, lo difícil y lo que repito.', cta: '¿Cómo fue tu semana? Cuéntame.' },
+    ]},
+    // Saturday=6
+    { day: 'Sábado', items: [
+      { platform: 'YouTube', format: 'Video largo', pillar: '💑 Vida construida', theme: 'Mi mes como nómada en números', hook: '¿Cuánto gané, cuánto gasté y qué aprendí este mes viviendo y trabajando online?', cta: 'Suscríbete y activa la campana.' },
+      { platform: 'Threads', format: 'Post texto', pillar: '🌍 Escenario', theme: 'El lugar que más me sorprendió', hook: 'El destino que menos esperaba termina siendo mi favorito.', cta: '¿Cuál es tu destino sorpresa?' },
+    ]},
+  ];
+
+  const PILLAR_COLORS = {
+    '🌍 Escenario': '#6C63FF',
+    '🔄 Proceso': '#22d3ee',
+    '💥 Tensión': '#f59e0b',
+    '💑 Vida construida': '#10b981',
+  };
+
+  const PLATFORM_COLORS = {
+    YouTube: '#ff0000', Instagram: '#e1306c', Facebook: '#1877f2',
+    Threads: '#000', TikTok: '#010101', Pinterest: '#e60023',
+  };
+
+  let _publishedToday = [];
+  const _todayStr = new Date().toISOString().split('T')[0];
+
+  async function loadHoyPublicado() {
+    try {
+      const r = await fetch(\`/published/\${_todayStr}\`);
+      const d = await r.json();
+      _publishedToday = d.published || [];
+    } catch (_) { _publishedToday = []; }
+    renderHoyPub();
+  }
+
+  function renderHoyPub() {
+    const grid = document.getElementById('hoy-pub-grid');
+    if (!grid) return;
+    const dow = new Date().getDay();
+    const schedule = HOY_SCHEDULE[dow];
+    if (!schedule || !schedule.items.length) {
+      grid.innerHTML = '<p style="color:#9898b0;">No hay publicaciones programadas para hoy.</p>';
+      return;
+    }
+    grid.innerHTML = schedule.items.map((item, i) => {
+      const key = item.platform.toLowerCase().replace(/\\s+/g, '-') + '-' + i;
+      const published = _publishedToday.includes(key);
+      const pColor = PLATFORM_COLORS[item.platform] || '#6C63FF';
+      const pillarColor = PILLAR_COLORS[item.pillar] || '#6C63FF';
+      return \`
+        <div class="hoy-pub-card\${published ? ' hoy-pub-done' : ''}" id="hoy-card-\${key}">
+          <div class="hoy-pub-card-top">
+            <span class="hoy-pub-platform" style="background:\${pColor};">\${item.platform}</span>
+            <span class="hoy-pub-format">\${item.format}</span>
+            <span class="hoy-pub-pillar" style="border-color:\${pillarColor};color:\${pillarColor};">\${item.pillar}</span>
+          </div>
+          <div class="hoy-pub-theme">\${item.theme}</div>
+          <div class="hoy-pub-hook">\${item.hook}</div>
+          <div class="hoy-pub-cta">CTA: \${item.cta}</div>
+          <button class="hoy-pub-btn\${published ? ' hoy-pub-btn-done' : ''}" onclick="markPublished('\${key}',this)">\${published ? '✓ Publicado' : 'Marcar publicado'}</button>
+        </div>
+      \`;
+    }).join('');
+  }
+
+  async function markPublished(key, btn) {
+    if (_publishedToday.includes(key)) return;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      await fetch(\`/published/\${_todayStr}\`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: key }),
+      });
+      _publishedToday.push(key);
+      renderHoyPub();
+    } catch (_) {
+      btn.disabled = false;
+      btn.textContent = 'Marcar publicado';
+    }
+  }
+
+  // Load on page init
+  loadHoyPublicado();
+
+  // ── Ideas Kanban ─────────────────────────────────────────────────────────────
+  const KANBAN_STAGES = ['idea','guion','filmado','editado','publicado'];
+  const KANBAN_STAGE_LABELS = { idea: '💡 Idea', guion: '📝 Guión listo', filmado: '🎬 Filmado', editado: '✂️ Editado', publicado: '✅ Publicado' };
+  let _kanbanIdeas = [];
+  let _editingIdeaId = null;
+
+  async function loadKanban() {
+    try {
+      const r = await fetch('/api/ideas');
+      const d = await r.json();
+      _kanbanIdeas = d.data || [];
+    } catch (_) { _kanbanIdeas = []; }
+    renderKanban();
+  }
+
+  function renderKanban() {
+    KANBAN_STAGES.forEach(stage => {
+      const col = document.getElementById(\`kanban-\${stage}\`);
+      if (!col) return;
+      const items = _kanbanIdeas.filter(i => (i.stage || 'idea') === stage);
+      col.innerHTML = items.length === 0
+        ? \`<div style="color:#4b5563;font-size:12px;text-align:center;padding:16px;">Sin ideas</div>\`
+        : items.map(idea => renderKanbanCard(idea)).join('');
+    });
+  }
+
+  function renderKanbanCard(idea) {
+    const stage = idea.stage || 'idea';
+    const stageIdx = KANBAN_STAGES.indexOf(stage);
+    const canMoveNext = stageIdx < KANBAN_STAGES.length - 1;
+    const nextStage = canMoveNext ? KANBAN_STAGES[stageIdx + 1] : null;
+    const nextLabel = nextStage ? KANBAN_STAGE_LABELS[nextStage] : '';
+    return \`
+      <div class="kanban-card">
+        <div class="kanban-card-title">\${idea.title || 'Sin título'}</div>
+        \${idea.pillar ? \`<div class="kanban-card-pillar">\${idea.pillar}</div>\` : ''}
+        <div class="kanban-card-meta">\${idea.platform || ''}\${idea.notes ? ' · ' + idea.notes.slice(0,40) : ''}</div>
+        <div class="kanban-card-actions">
+          \${canMoveNext ? \`<button class="kanban-card-btn move-btn" onclick="moveKanbanIdea('\${idea.id}','')">→ \${nextLabel}</button>\` : ''}
+          <button class="kanban-card-btn guion-btn" onclick="generateKanbanGuion('\${idea.id}')">✍ Guión</button>
+          <button class="kanban-card-btn" onclick="editKanbanIdea('\${idea.id}')">✎</button>
+          <button class="kanban-card-btn" onclick="deleteKanbanIdea('\${idea.id}')" style="color:#ef4444;">✕</button>
+        </div>
+      </div>
+    \`;
+  }
+
+  async function moveKanbanIdea(id, _unused) {
+    const idea = _kanbanIdeas.find(i => i.id === id);
+    if (!idea) return;
+    const stageIdx = KANBAN_STAGES.indexOf(idea.stage || 'idea');
+    if (stageIdx >= KANBAN_STAGES.length - 1) return;
+    const nextStage = KANBAN_STAGES[stageIdx + 1];
+    try {
+      await fetch(\`/api/ideas/\${id}\`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...idea, stage: nextStage }),
+      });
+      idea.stage = nextStage;
+      renderKanban();
+    } catch (_) {}
+  }
+
+  async function deleteKanbanIdea(id) {
+    if (!confirm('¿Eliminar esta idea?')) return;
+    try {
+      await fetch(\`/api/ideas/\${id}\`, { method: 'DELETE' });
+      _kanbanIdeas = _kanbanIdeas.filter(i => i.id !== id);
+      renderKanban();
+    } catch (_) {}
+  }
+
+  function editKanbanIdea(id) {
+    const idea = _kanbanIdeas.find(i => i.id === id);
+    if (!idea) return;
+    _editingIdeaId = id;
+    document.getElementById('kanban-modal-title').textContent = 'Editar idea';
+    document.getElementById('ki-title').value = idea.title || '';
+    document.getElementById('ki-pillar').value = idea.pillar || '';
+    document.getElementById('ki-platform').value = idea.platform || '';
+    document.getElementById('ki-notes').value = idea.notes || '';
+    document.getElementById('kanban-modal-overlay').style.display = 'flex';
+  }
+
+  function openIdeaKanbanModal() {
+    _editingIdeaId = null;
+    document.getElementById('kanban-modal-title').textContent = 'Nueva idea';
+    document.getElementById('ki-title').value = '';
+    document.getElementById('ki-pillar').value = '';
+    document.getElementById('ki-platform').value = '';
+    document.getElementById('ki-notes').value = '';
+    document.getElementById('kanban-modal-overlay').style.display = 'flex';
+  }
+
+  function closeIdeaKanbanModal() {
+    document.getElementById('kanban-modal-overlay').style.display = 'none';
+    _editingIdeaId = null;
+  }
+
+  async function saveIdeaKanban() {
+    const title = document.getElementById('ki-title').value.trim();
+    if (!title) { alert('El título es obligatorio.'); return; }
+    const payload = {
+      title,
+      pillar: document.getElementById('ki-pillar').value,
+      platform: document.getElementById('ki-platform').value,
+      notes: document.getElementById('ki-notes').value.trim(),
+    };
+    try {
+      if (_editingIdeaId) {
+        const idea = _kanbanIdeas.find(i => i.id === _editingIdeaId);
+        const updated = { ...idea, ...payload };
+        await fetch(\`/api/ideas/\${_editingIdeaId}\`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+        Object.assign(idea, payload);
+      } else {
+        const r = await fetch('/api/ideas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, stage: 'idea' }),
+        });
+        const d = await r.json();
+        if (d.data) _kanbanIdeas.push(d.data);
+      }
+      closeIdeaKanbanModal();
+      renderKanban();
+    } catch (_) { alert('Error guardando la idea.'); }
+  }
+
+  function generateKanbanGuion(id) {
+    const idea = _kanbanIdeas.find(i => i.id === id);
+    if (!idea) return;
+    const guionInput = \`Idea: \${idea.title}\${idea.pillar ? '\\nPilar: ' + idea.pillar : ''}\${idea.notes ? '\\nNotas: ' + idea.notes : ''}\`;
+    showSection('outliers');
+    setTimeout(() => {
+      const textarea = document.getElementById('guion-input') || document.querySelector('.guion-textarea');
+      if (textarea) { textarea.value = guionInput; textarea.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 200);
   }
 
   function editActual(platform, monthTag, current, span) {
@@ -1996,27 +2383,22 @@ app.post('/generate-posts', async (req, res) => {
 ${content.slice(0, 4000)}
 ---
 
-Genera exactamente 6 posts para redes sociales con mi voz. Cada uno debe tener:
-- Una versión para Threads (máximo 500 caracteres)
-- Una versión para X/Twitter (máximo 280 caracteres, más concisa y directa)
+Genera exactamente 2 sets de posts para redes sociales con la voz de Marcia. Cada set tiene:
+- 1 post para Threads (máximo 500 caracteres, conversacional, sin emojis, sin bullets de IA)
+- 1 post para Facebook (máximo 400 palabras, personal, narrativo, como carta a una amiga)
+- 1 idea de pin para Pinterest (título SEO conciso + descripción de ~100 palabras orientada a búsqueda, sin emojis)
 
-Los 6 posts deben ser:
-1. El dato sorprendente (un número, hecho o dato que nadie esperaría)
-2. La historia personal (un momento concreto que Marcia vivió relacionado al tema)
-3. La reflexión sobre trabajar online (lo real, no el marketing de lifestyle)
-4. El contraste nómada vs corporativo (sin romantizar ninguno de los dos)
-5. El consejo práctico (algo accionable, específico, que la gente pueda usar hoy)
-6. La pregunta que genera debate (que invite a responder en los comentarios)
+Los 2 sets deben cubrir ángulos distintos del contenido:
+Set 1: El dato o insight inesperado + historia personal concreta
+Set 2: El consejo accionable + la pregunta que genera reflexión
+
+Reglas de voz: sin emojis, sin bullets de IA, sin frases de lifestyle vacías, todo en primera persona y tono real.
 
 Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto antes ni después:
 {
   "posts": [
-    { "threads": "texto para threads", "x": "texto para x" },
-    { "threads": "texto para threads", "x": "texto para x" },
-    { "threads": "texto para threads", "x": "texto para x" },
-    { "threads": "texto para threads", "x": "texto para x" },
-    { "threads": "texto para threads", "x": "texto para x" },
-    { "threads": "texto para threads", "x": "texto para x" }
+    { "threads": "texto para threads", "facebook": "texto para facebook", "pinterest_title": "Título SEO", "pinterest_desc": "descripción de 100 palabras" },
+    { "threads": "texto para threads", "facebook": "texto para facebook", "pinterest_title": "Título SEO", "pinterest_desc": "descripción de 100 palabras" }
   ]
 }`;
 
@@ -2024,7 +2406,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
+      max_tokens: 3000,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -2405,13 +2787,16 @@ app.get('/my-channel', async (req, res) => {
           params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' },
         });
         const pages = pagesRes.data.data || [];
-        const page = pages.find(p => /marcia/i.test(p.name)) || pages[0];
+        const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
         if (page) {
           const pageToken = page.access_token || metaToken;
           const pageRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
             params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken },
           });
-          facebookFollowers = pageRes.data.followers_count ?? pageRes.data.fan_count ?? null;
+          // fan_count is the legacy field; followers_count is newer but may be 0 on some pages
+          const fc = pageRes.data.followers_count;
+          const fanc = pageRes.data.fan_count;
+          facebookFollowers = (fc != null && fc > 0) ? fc : (fanc != null ? fanc : null);
           const igId = pageRes.data.instagram_business_account?.id;
           if (igId) {
             const igRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}`, {
@@ -2577,7 +2962,8 @@ app.get('/metas-data', async (req, res) => {
     })(),
   ]);
 
-  const actuals = stored || {};
+  const defaults = { facebook: 2100, instagram: 1730, tiktok: 243, threads: 487, mailerlite: 0, youtube: 94 };
+  const actuals = { ...defaults, ...(stored || {}) };
   if (channelData !== null) actuals.youtube = channelData;
   res.json(actuals);
 });
@@ -3071,6 +3457,28 @@ app.post('/api/ideas/:id/convert', async (req, res) => {
     res.json({ success: true, data });
   } catch (err) {
     res.json({ success: false, error: err.message });
+  }
+});
+
+// ── GET /published/:date ───────────────────────────────────────────────────────
+app.get('/published/:date', async (req, res) => {
+  try {
+    const platforms = await loadPublishedDay(req.params.date);
+    res.json({ published: platforms });
+  } catch (err) {
+    res.json({ published: [] });
+  }
+});
+
+// ── POST /published/:date ──────────────────────────────────────────────────────
+app.post('/published/:date', async (req, res) => {
+  const { platform } = req.body;
+  if (!platform) return res.status(400).json({ error: 'Falta platform' });
+  try {
+    await savePublished(req.params.date, platform);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
