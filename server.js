@@ -1662,13 +1662,13 @@ app.get('/', async (req, res) => {
   function metasFmt(n) { if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 1000) return (n/1000).toFixed(0)+'K'; return n.toLocaleString('es-CL'); }
 
   const MONTHS = [
-    { name: 'Mayo', tag: 'mayo', days: 12, desc: 'estabilizar + publicar',
+    { name: 'Mayo', tag: 'mayo', monthIndex: 4, desc: 'estabilizar + publicar',
       goals: { facebook: 2500, instagram: 1900, youtube: 110, tiktok: 350, threads: 550, mailerlite: 20, income: 25 } },
-    { name: 'Junio', tag: 'junio', days: 30, desc: 'consistencia + aceleración',
+    { name: 'Junio', tag: 'junio', monthIndex: 5, desc: 'consistencia + aceleración',
       goals: { facebook: 5000, instagram: 3000, youtube: 200, tiktok: 1000, threads: 800, mailerlite: 100, income: 150 } },
-    { name: 'Julio', tag: 'julio', days: 30, desc: 'monetización múltiple + primer afiliado',
+    { name: 'Julio', tag: 'julio', monthIndex: 6, desc: 'monetización múltiple + primer afiliado',
       goals: { facebook: 10000, instagram: 6000, youtube: 400, tiktok: 3000, threads: 1500, mailerlite: 300, income: 400 } },
-    { name: 'Agosto', tag: 'agosto', days: 30, desc: 'escala + primer sponsorship',
+    { name: 'Agosto', tag: 'agosto', monthIndex: 7, desc: 'escala + primer sponsorship',
       goals: { facebook: 15000, instagram: 10000, youtube: 700, tiktok: 7000, threads: 2500, mailerlite: 600, income: 800 } },
   ];
 
@@ -1749,7 +1749,10 @@ app.get('/', async (req, res) => {
     // Current month
     document.getElementById('metas-cur-name').textContent = cur.name;
     document.getElementById('metas-cur-desc').textContent = cur.desc;
-    document.getElementById('metas-cur-days').textContent = cur.days + ' días restantes';
+    const _now = new Date();
+    const _lastDay = new Date(_now.getFullYear(), cur.monthIndex, 0).getDate();
+    const _daysLeft = (_now.getMonth() + 1 === cur.monthIndex) ? Math.max(0, _lastDay - _now.getDate()) : (_now.getMonth() + 1 < cur.monthIndex ? _lastDay : 0);
+    document.getElementById('metas-cur-days').textContent = _daysLeft + ' días restantes';
     renderPlatforms('metas-cur-platforms', cur.tag, cur.goals, actuals, true);
 
     // Future months
