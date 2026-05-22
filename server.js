@@ -519,12 +519,47 @@ app.get('/', async (req, res) => {
     .metas-income-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .metas-income-month { }
     .metas-income-month-name { font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
-    .metas-income-row { display: flex; align-items: center; gap: 6px; }
+    .metas-income-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .metas-income-actual { font-size: 20px; font-weight: 800; color: #34d399; cursor: pointer; border-bottom: 1px dashed #374151; min-width: 40px; display: inline-block; }
-    .metas-income-input { width: 70px; background: #111; border: 1px solid #6366f1; border-radius: 4px; color: #34d399; font-size: 18px; font-weight: 800; padding: 2px 4px; }
+    .metas-income-actual:hover { color: #6ee7b7; }
+    .metas-income-input { width: 80px; background: #111; border: 1px solid #6366f1; border-radius: 4px; color: #34d399; font-size: 18px; font-weight: 800; padding: 2px 6px; outline: none; }
     .metas-income-goal { font-size: 13px; color: #6b7280; }
-    .metas-income-bar-wrap { background: #2a2a2a; border-radius: 4px; height: 4px; margin-top: 8px; overflow: hidden; }
+    .metas-income-bar-wrap { background: #2a2a2a; border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
     .metas-income-bar-fill { height: 100%; border-radius: 4px; background: #34d399; transition: width .4s; }
+    .metas-income-pct { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .metas-income-adds { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .metas-income-add-chip { font-size: 11px; background: #0f2a1a; border: 1px solid #065f46; color: #34d399; padding: 2px 7px; border-radius: 10px; }
+    .btn-income-add { width: 22px; height: 22px; border-radius: 50%; background: #1e1b4b; border: 1px solid #4f46e5; color: #a78bfa; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+    .btn-income-add:hover { background: #312e81; }
+    /* Income modal */
+    .income-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 950; display: flex; align-items: center; justify-content: center; }
+    .income-modal { background: #141420; border: 1px solid #2a2a3a; border-radius: 14px; padding: 24px; width: 340px; max-width: 94vw; }
+    .income-modal-title { font-size: 16px; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+    .income-modal-sub { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+    .income-modal-input { width: 100%; background: #1a1a1a; border: 1px solid #4f46e5; border-radius: 8px; color: #34d399; font-size: 22px; font-weight: 800; padding: 10px 14px; outline: none; font-family: inherit; }
+    .income-modal-input:focus { border-color: #818cf8; }
+    .income-modal-note { font-size: 12px; color: #6b7280; margin-top: 8px; margin-bottom: 16px; }
+    .income-modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+    .income-modal-cancel { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .income-modal-save { background: #4f46e5; border: none; color: #fff; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .income-modal-save:hover { background: #4338ca; }
+    /* FB monetization note */
+    .fb-mono-note { margin-top: 20px; background: #0c1340; border: 1px solid #1d4ed8; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .fb-mono-note-text { flex: 1; font-size: 13px; color: #93c5fd; line-height: 1.5; }
+    .fb-mono-note-text strong { color: #bfdbfe; display: block; margin-bottom: 2px; }
+    .btn-fb-mono { background: #1d4ed8; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn-fb-mono:hover { background: #1e40af; }
+    /* FB instructions modal */
+    .fb-instr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 960; display: flex; align-items: center; justify-content: center; }
+    .fb-instr-modal { background: #0f1729; border: 1px solid #1d4ed8; border-radius: 16px; padding: 28px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .fb-instr-title { font-size: 18px; font-weight: 700; color: #bfdbfe; margin-bottom: 16px; }
+    .fb-instr-step { display: flex; gap: 12px; margin-bottom: 16px; }
+    .fb-instr-num { flex-shrink: 0; width: 26px; height: 26px; background: #1d4ed8; border-radius: 50%; font-size: 13px; font-weight: 800; color: #fff; display: flex; align-items: center; justify-content: center; }
+    .fb-instr-body { font-size: 13px; color: #93c5fd; line-height: 1.6; }
+    .fb-instr-body a { color: #60a5fa; }
+    .fb-instr-code { background: #1a2030; border: 1px solid #2a3a55; border-radius: 6px; padding: 8px 12px; font-family: monospace; font-size: 12px; color: #7dd3fc; margin-top: 6px; word-break: break-all; }
+    .fb-instr-close { margin-top: 20px; background: #1d4ed8; border: none; color: #fff; padding: 9px 22px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .fb-instr-close:hover { background: #1e40af; }
     .metas-golden-rule { background: #0f172a; border: 1px solid #1e3a5f; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; }
     .metas-golden-title { font-size: 12px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
     .metas-golden-flow { font-size: 15px; color: #e2e8f0; font-weight: 600; letter-spacing: .02em; }
@@ -804,6 +839,79 @@ app.get('/', async (req, res) => {
   <div class="metas-income-card">
     <div class="metas-income-title">💰 Meta de ingresos</div>
     <div class="metas-income-grid" id="metas-income-grid"></div>
+
+    <!-- FB monetization note -->
+    <div class="fb-mono-note">
+      <div class="fb-mono-note-text">
+        <strong>🔌 Conectar monetización de Facebook automáticamente</strong>
+        Actualmente el ingreso se registra de forma manual. Puedes automatizarlo solicitando los permisos correctos en Meta for Developers.
+      </div>
+      <button class="btn-fb-mono" onclick="showFbInstructions()">Ver instrucciones →</button>
+    </div>
+  </div>
+
+  <!-- Income add modal -->
+  <div class="income-modal-overlay" id="income-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIncomeModal()">
+    <div class="income-modal">
+      <div class="income-modal-title" id="income-modal-title">Agregar ingreso — <span id="income-modal-month"></span></div>
+      <div class="income-modal-sub">Total actual: <span id="income-modal-current" style="color:#34d399;font-weight:700;"></span></div>
+      <input type="number" class="income-modal-input" id="income-modal-amount" placeholder="0" min="0" step="0.01"/>
+      <div class="income-modal-note">Este monto se sumará al total acumulado del mes. Para corregir el total completo, haz click directo sobre el monto.</div>
+      <div class="income-modal-footer">
+        <button class="income-modal-cancel" onclick="closeIncomeModal()">Cancelar</button>
+        <button class="income-modal-save" onclick="commitIncomeAdd()">+ Sumar ingreso</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FB instructions modal -->
+  <div class="fb-instr-overlay" id="fb-instr-overlay" style="display:none;" onclick="if(event.target===this)closeFbInstructions()">
+    <div class="fb-instr-modal">
+      <div class="fb-instr-title">🔌 Cómo conectar la monetización de Facebook</div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">1</div>
+        <div class="fb-instr-body">
+          Entra a <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com/apps</a> y selecciona tu app (o créala si no la tienes).
+        </div>
+      </div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">2</div>
+        <div class="fb-instr-body">
+          En el panel izquierdo ve a <strong>App Review → Permissions and Features</strong>. Busca y solicita estos dos permisos:
+          <div class="fb-instr-code">pages_read_engagement</div>
+          <div class="fb-instr-code">business_management</div>
+          Estos te dan acceso a métricas de la página y datos de monetización del Business Manager.
+        </div>
+      </div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">3</div>
+        <div class="fb-instr-body">
+          Para justificar la solicitud a Meta, describe el caso de uso así: <br/>
+          <em>"Esta app obtiene datos de ingresos de monetización de Facebook (Creator Studio / Business Manager) para mostrarlos al propietario de la página en su propio dashboard privado. Solo el propietario usa la app."</em>
+        </div>
+      </div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">4</div>
+        <div class="fb-instr-body">
+          Una vez aprobado, el endpoint que se llamará será:
+          <div class="fb-instr-code">GET /me/monetization_insights?fields=estimated_earnings&access_token={token}</div>
+          Este retorna los ingresos estimados del período.
+        </div>
+      </div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">5</div>
+        <div class="fb-instr-body">
+          Avísame cuando tengas los permisos aprobados y lo conecto directamente en el código para que se rellene automáticamente. 🚀
+        </div>
+      </div>
+
+      <button class="fb-instr-close" onclick="closeFbInstructions()">Entendido, cerrar</button>
+    </div>
   </div>
 
   <!-- Golden rule -->
@@ -1608,18 +1716,26 @@ app.get('/', async (req, res) => {
     if (!el) return;
     el.innerHTML = MONTHS.map(m => {
       const actual = actuals['income_' + m.tag] ?? 0;
+      const adds = actuals['income_adds_' + m.tag] || [];
       const goal = m.goals.income;
       const pct = Math.min(100, Math.round((actual / goal) * 100));
+      const barColor = pct >= 100 ? '#4ade80' : pct >= 60 ? '#34d399' : '#22d3ee';
+      const chipsHtml = adds.length > 0
+        ? \`<div class="metas-income-adds">\${adds.map(a => \`<span class="metas-income-add-chip">+$\${a}</span>\`).join('')}</div>\`
+        : '';
       return \`
         <div class="metas-income-month">
           <div class="metas-income-month-name">\${m.name}</div>
           <div class="metas-income-row">
-            <span class="metas-income-actual" onclick="editIncome('\${m.tag}',\${actual},this)">$\${actual}</span>
-            <span class="metas-income-goal">/ $\${goal} USD</span>
+            <span class="metas-income-actual" onclick="editIncome('\${m.tag}',\${actual},this)" title="Click para editar el total">$\${actual}</span>
+            <span class="metas-income-goal">/ $\${goal}</span>
+            <button class="btn-income-add" onclick="openIncomeModal('\${m.tag}','\${m.name}',\${actual})" title="Agregar ingreso parcial">+</button>
           </div>
+          \${chipsHtml}
           <div class="metas-income-bar-wrap">
-            <div class="metas-income-bar-fill" style="width:\${pct}%;"></div>
+            <div class="metas-income-bar-fill" style="width:\${pct}%;background:\${barColor};"></div>
           </div>
+          <div class="metas-income-pct">\${pct}% de meta</div>
         </div>\`;
     }).join('');
   }
@@ -1964,24 +2080,82 @@ app.get('/', async (req, res) => {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
   }
 
+  // ── Income: click-to-edit (replaces total) ────────────────────────────────
   function editIncome(monthTag, current, span) {
     const key = 'income_' + monthTag;
     const input = document.createElement('input');
     input.type = 'number';
     input.className = 'metas-income-input';
     input.value = current;
+    input.min = '0';
+    input.step = '0.01';
     span.replaceWith(input);
     input.focus();
     input.select();
     const commit = () => {
-      const val = parseFloat(input.value) || 0;
-      metasActuals[key] = val;
-      saveActuals();
+      const val = parseFloat(input.value);
+      if (!isNaN(val) && val >= 0) {
+        metasActuals[key] = val;
+        // Reset the partial adds chips when total is manually overwritten
+        metasActuals['income_adds_' + monthTag] = [];
+        saveActuals();
+      }
       metasLoaded = false;
       loadMetas();
     };
     input.addEventListener('blur', commit);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } if (e.key === 'Escape') { metasLoaded = false; loadMetas(); } });
+  }
+
+  // ── Income: "+" modal — accumulative partial adds ─────────────────────────
+  let _incomeModalTag = null;
+
+  function openIncomeModal(monthTag, monthName, currentTotal) {
+    _incomeModalTag = monthTag;
+    document.getElementById('income-modal-month').textContent = monthName;
+    document.getElementById('income-modal-current').textContent = '$' + currentTotal + ' USD';
+    document.getElementById('income-modal-amount').value = '';
+    document.getElementById('income-modal-overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('income-modal-amount').focus(), 50);
+  }
+
+  function closeIncomeModal() {
+    document.getElementById('income-modal-overlay').style.display = 'none';
+    _incomeModalTag = null;
+  }
+
+  function commitIncomeAdd() {
+    if (!_incomeModalTag) return;
+    const rawVal = document.getElementById('income-modal-amount').value;
+    const amount = parseFloat(rawVal);
+    if (isNaN(amount) || amount <= 0) {
+      document.getElementById('income-modal-amount').focus();
+      return;
+    }
+    const key = 'income_' + _incomeModalTag;
+    const addsKey = 'income_adds_' + _incomeModalTag;
+    metasActuals[key] = (metasActuals[key] ?? 0) + amount;
+    if (!Array.isArray(metasActuals[addsKey])) metasActuals[addsKey] = [];
+    metasActuals[addsKey].push(amount);
+    saveActuals();
+    closeIncomeModal();
+    metasLoaded = false;
+    loadMetas();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeIncomeModal();
+      closeFbInstructions();
+    }
+  });
+
+  // ── FB instructions modal ─────────────────────────────────────────────────
+  function showFbInstructions() {
+    document.getElementById('fb-instr-overlay').style.display = 'flex';
+  }
+  function closeFbInstructions() {
+    document.getElementById('fb-instr-overlay').style.display = 'none';
   }
 </script>
 <script src="/calendario.js"></script>
