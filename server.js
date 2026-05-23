@@ -7,9 +7,12 @@ const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 const { loadOutliersFromRedis, trackUsage, getUsageSummary, getUsageHistory, getDailyTotals, saveChannels, loadChannels, saveMetaToken, loadMetaToken, saveTikTokToken, loadTikTokToken, saveMetasActuals, loadMetasActuals, saveCalendarEntry, loadCalendarDay, saveWeekPlan, loadWeekPlan, saveIdeas, loadIdeas, savePublished, loadPublishedDay } = require('./redis');
 
+const { GINI_BRAND_CONTEXT } = require('./lib/giniContext');
 const brandBlueprint = fs.readFileSync('./brand-blueprint.md', 'utf8');
 const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
-const systemPrompt = `${brandBlueprint}\n\nBANCO DE HISTORIAS REALES:\n${storiesBank}`;
+// GINI_BRAND_CONTEXT leads — it is the condensed, actionable brand layer.
+// brandBlueprint + storiesBank follow as the deep reference material.
+const systemPrompt = `${GINI_BRAND_CONTEXT}\n\n${brandBlueprint}\n\nBANCO DE HISTORIAS REALES:\n${storiesBank}`;
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -2562,28 +2565,43 @@ app.post('/generate-shorts', async (req, res) => {
 
   const qty = Math.min(3, Math.max(1, parseInt(quantity, 10) || 1));
 
-  const prompt = `Este video fue outlier: "${videoTitle}" — ${score}x el promedio del canal.
-Identifica QUÉ tema o formato hizo que ese video funcionara.
-Encuentra en el banco de historias reales de Marcia una experiencia equivalente o relacionada.
-Genera ${qty} short(s) 100% original(es) basado(s) en ESA experiencia real.
-NUNCA menciones el video original ni al creador original.
-Si no hay historia real que encaje exactamente, usa el marcador [MARCIA: insertar experiencia real aquí] en ese punto.
+  const prompt = `VIDEO OUTLIER DE REFERENCIA: "${videoTitle}" — ${score}x el promedio en ${channel}.
 
-Cada short debe durar 60-90 segundos cuando se lea en voz alta y ser independiente de los demás.
+Genera ${qty} short(s) / reel(s) para Marcia (@marcia.nomada).
+Cada uno debe nacer de UNA historia real del banco de historias — no del video original.
+NUNCA menciones el video original ni al canal de referencia.
+Si no hay historia exacta disponible, marca [MARCIA: insertar momento real aquí].
 
-Para cada short incluye:
-- hook: los primeros 3 segundos exactos que detienen el scroll (frase de impacto, pregunta perturbadora, o afirmación contraintuitiva — basada en experiencia real)
-- body: desarrollo del contenido (60-75 seg) con dato concreto, costo real o experiencia específica de Marcia y Tomi, sin relleno
-- cta: llamada a acción final (5-10 seg), variada entre los shorts si hay más de uno
-- filming: UNA de estas opciones según el contenido: "Filmar in situ — exterior/calle" | "Filmar in situ — interior/habitación" | "A cámara directa — talking head"
+REGLAS IRROMPIBLES PARA CADA SHORT:
+1. HOOK (primeros 3 segundos): debe generar tensión o curiosidad inmediata.
+   Opciones: afirmación contraintuitiva | dato que nadie esperaría | pregunta que duele | momento in media res.
+   Viene de una experiencia CONCRETA de Marcia — nunca genérico.
+   Ejemplos de tono correcto:
+   — "El día que elegimos comer antes que dormir bajo techo, yo entendí algo."
+   — "Nadie me dijo que vivir libre iba a costar exactamente [X] al mes."
+   — "Mi mamá pensó que me había vuelto loca. Tenía razón en la mitad."
+
+2. BODY (60-75 segundos): UN solo punto desarrollado con profundidad.
+   Dato real, costo real, o escena específica. Sin listar. Sin relleno.
+   Voz de Marcia: directa, un poco incómoda, nunca motivacional.
+
+3. CTA (últimos 5-10 segundos): lleva al siguiente nivel del funnel.
+   — Si el short es de Pilar 1 o 2 → CTA al video largo de YouTube
+   — Si es de Pilar 3 o 4 → CTA a la newsletter / carta semanal
+   Varía el CTA entre los shorts si generas más de uno.
+
+4. DURACIÓN: 60-90 segundos totales al leer en voz alta. Ni más, ni menos.
+
+5. FILMING: una sola indicación específica basada en el contenido:
+   "Filmar in situ — exterior/calle" | "Filmar in situ — interior/habitación" | "A cámara directa — talking head"
 
 Responde ÚNICAMENTE con JSON válido, sin texto antes ni después:
 {
   "shorts": [
     {
-      "hook": "texto del hook",
-      "body": "texto del desarrollo",
-      "cta": "texto del cta",
+      "hook": "texto exacto del hook — primeras 3 segundos",
+      "body": "desarrollo completo del cuerpo — 60-75 seg",
+      "cta": "texto exacto del CTA — últimos 5-10 seg",
       "filming": "indicación de filmación"
     }
   ]
@@ -2617,26 +2635,53 @@ app.post('/generate-script', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `Este video fue outlier: "${videoTitle}" — ${score}x el promedio del canal.
-Identifica QUÉ tema o formato hizo que ese video funcionara.
-Encuentra en el banco de historias reales de Marcia una experiencia equivalente o relacionada.
-Genera contenido 100% original basado en ESA experiencia real.
-NUNCA menciones el video original ni al creador original.
-Si no hay historia real que encaje exactamente, usa el marcador [MARCIA: insertar experiencia real aquí] en ese punto.
+  // Detect content pillar from the outlier title
+  const pillarHint =
+    /costo|precio|dinero|sueldo|ingreso|presupuesto|ahorro|gasto/i.test(videoTitle) ? '2 — El Proceso (números reales, inestabilidad honesta)' :
+    /familia|padres|permiso|miedo|dejar|renunciar|molde|valiente/i.test(videoTitle) ? '3 — La Tensión (salir del molde sin perderlo todo)' :
+    /tomi|pareja|juntos|relacion|amor|solos/i.test(videoTitle) ? '4 — La Vida Construida (Marcia y Tomi en movimiento)' :
+    '1 — El Escenario (dato que nadie sabe + honestidad sin filtro)';
 
-Genera el guion completo para YouTube (8-12 minutos) usando este framework de 7 pasos:
+  const prompt = `VIDEO OUTLIER DE REFERENCIA: "${videoTitle}" — ${score}x el promedio en ${channel}.
 
-1. PATTERN INTERRUPTION (primeros 3 segundos): algo que rompa el patrón y detenga el scroll
-2. MIRROR TO VIEWER: hablarle directamente a la audiencia, que se vea reflejada
-3. REVEAL THE OPPORTUNITY: mostrar qué van a aprender
-4. EXPOSE THE GAP/CURIOSITY: crear tensión o pregunta sin respuesta
-5. PROMISE THE TRANSFORMATION: qué van a poder hacer/saber al final
-6. AUTHORITY: quién es Marcia para contarles esto (sin sonar arrogante)
-7. TRANSITION AL CONTENIDO: entrada natural al tema
+PASO 1 — DETECTAR EL PATRÓN:
+Analiza qué hizo funcionar ese video (emoción, formato, promesa, dato sorprendente).
+Pilar detectado: ${pillarHint}
 
-Después del hook, desarrolla el contenido completo con datos reales, costos concretos cuando aplique, y experiencias específicas de Marcia y Tomi. Termina con CTA: "Sígueme para más sobre vivir en [país] sin filtros".
+PASO 2 — ANCLAR EN MARCIA:
+Encuentra en el banco de historias reales la experiencia más cercana.
+El guion debe nacer de ESA experiencia concreta, no del video original.
+NUNCA menciones el video original ni al canal de referencia.
+Si no hay historia exacta disponible, marca [MARCIA: insertar momento real aquí].
 
-El guion debe estar listo para leer como teleprompter.`;
+PASO 3 — GUION COMPLETO PARA YOUTUBE (objetivo: 8-15 minutos, 1200-2000 palabras):
+
+Estructura obligatoria — 5 bloques:
+
+[HOOK PERSONAL — 0:00-0:45]
+Abre con un momento real y concreto de Marcia (no una pregunta genérica).
+Debe conectar el tema del video con su historia personal en las primeras 3 frases.
+Ejemplo de tono: "El día que [situación específica real], yo pensé que [emoción honesta]. Hoy te cuento qué pasó después."
+
+[CONTEXTO REAL — 0:45-2:00]
+Por qué este tema importa. Datos reales cuando los haya.
+Conectar con el miedo de la audiencia: "¿Esto es todo lo que puedo tener?"
+
+[DESARROLLO HONESTO — 2:00-10:00]
+El cuerpo del video. Datos concretos, costos reales, errores incluidos.
+Sin romantizar. Sin saltar las partes difíciles.
+Tomi aparece como coprotagonista cuando es relevante.
+
+[REFLEXIÓN ANCLADA — 10:00-12:00]
+La lección — pero nacida de la experiencia narrada, no colgada encima.
+Una frase ADN si aplica naturalmente.
+
+[CTA DEL FUNNEL — 12:00-fin]
+Nivel de profundidad siguiente: newsletter, comunidad, o próximo video.
+Ejemplo: "Si esto te resonó, la carta de esta semana va más al fondo — link en bio."
+
+El guion debe estar formateado listo para teleprompter, con los timestamps de cada bloque indicados.`;
+
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -2646,7 +2691,7 @@ El guion debe estar listo para leer como teleprompter.`;
     const client = new Anthropic({ apiKey });
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-5',
-      max_tokens: 4000,
+      max_tokens: 6000,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -3454,9 +3499,22 @@ app.post('/calendar/regenerate-hook', async (req, res) => {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 256,
+      system: systemPrompt,
       messages: [{
         role: 'user',
-        content: `Genera un hook y CTA para un video de ${piece.platform} formato ${piece.format} sobre "${piece.theme}" basado en el plan semanal de Marcia (nómada digital en Egipto, su nicho: vida nómada sin romantizar). Responde SOLO con JSON: {"hook": "...", "cta": "..."}`,
+        content: `Genera un hook de apertura y un CTA final para Marcia (@marcia.nomada).
+Plataforma: ${piece.platform} | Formato: ${piece.format} | Tema: "${piece.theme}"
+
+El hook debe:
+- Durar exactamente 3 segundos al hablar
+- Nacer de una experiencia real de Marcia (no ser genérico)
+- Generar tensión, curiosidad o incomodidad inmediata
+
+El CTA debe:
+- Ser natural, no forzado
+- Llevar al siguiente nivel del funnel (YouTube si es corto, newsletter si es profundo)
+
+Responde SOLO con JSON válido: {"hook": "...", "cta": "..."}`,
       }],
     });
     const text = message.content[0]?.text || '{}';
@@ -3520,9 +3578,26 @@ app.post('/calendar/plan-week', async (req, res) => {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 1024,
+      system: systemPrompt,
       messages: [{
         role: 'user',
-        content: `Eres el planificador de contenido de Marcia, nómada digital en Egipto. Nicho: vida nómada sin romantizar, viajes reales con costos reales.\n\nOutliers recientes (top 5):\n${outlierTitles.map((t,i) => `${i+1}. ${t}`).join('\n') || 'No disponibles'}\n\nHorario semanal:\n${scheduleDesc}\n\nGenera un plan de 7 días (a partir de hoy) con temas específicos para cada pieza. Responde con JSON array: [{"date":"YYYY-MM-DD","topics":["tema para pieza 0","tema para pieza 1"]},...] con exactamente 7 objetos.`,
+        content: `Planifica los próximos 7 días de contenido para Marcia (@marcia.nomada).
+
+OUTLIERS RECIENTES (señales de qué está funcionando):
+${outlierTitles.map((t, i) => `${i + 1}. ${t}`).join('\n') || 'No disponibles'}
+
+HORARIO SEMANAL FIJO:
+${scheduleDesc}
+
+INSTRUCCIONES:
+- Asigna un tema concreto a cada pieza de cada día
+- Los temas deben rotar entre los 4 pilares (Escenario, Proceso, Tensión, Vida Construida)
+- Prioriza temas inspirados en los outliers recientes — adaptados a la voz de Marcia
+- Cada tema debe ser específico (ej: "Cuánto cuesta un mes en Egipto — números reales" > "Egipto")
+- Considera el funnel: TikTok/Reels son Nivel 1 (descubrimiento), YouTube es Nivel 3 (profundidad)
+
+Responde SOLO con JSON array, sin texto antes ni después:
+[{"date":"YYYY-MM-DD","topics":["tema para pieza 0","tema para pieza 1"]},...] con exactamente 7 objetos.`,
       }],
     });
     const text = message.content[0]?.text || '[]';
