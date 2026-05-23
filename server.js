@@ -2329,9 +2329,6 @@ app.get('/', async (req, res) => {
       ? \`<ul class="gini-repurpose-list">\${r.repurposer.map(item => \`<li>\${escGini(item)}</li>\`).join('')}</ul>\`
       : '<span style="color:#6b7280;">Sin ideas de repurpose</span>';
 
-    // Build youtube hook payload for "Generar guión" button
-    const ytPayload = JSON.stringify({ youtubeHook: r.youtubeHook, idea }).replace(/'/g, "\\'");
-
     resultEl.innerHTML = \`
       <!-- Classification tags -->
       <div class="gini-tags">
@@ -2348,11 +2345,11 @@ app.get('/', async (req, res) => {
       </div>\` : ''}
 
       <div class="gini-cards-grid">
-        \${giniCard('▶ YouTube Hook', r.youtubeHook, true, ytPayload)}
+        \${giniCard('▶ YouTube Hook', r.youtubeHook, true)}
         \${giniCard('♪ TikTok Hook', r.tiktokHook)}
         \${giniCard('🔵 Facebook Post', r.facebookPost)}
         \${giniCard('📧 Newsletter', r.newsletter)}
-        \${giniCard('♻️ Repurposer', '', false, '', repurposerHtml)}
+        \${giniCard('♻️ Repurposer', '', false, repurposerHtml)}
         \${giniCard('🎯 CTA', r.cta)}
       </div>
 
@@ -2365,7 +2362,7 @@ app.get('/', async (req, res) => {
     resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  function giniCard(label, text, showScriptBtn, ytPayload, customHtml) {
+  function giniCard(label, text, showScriptBtn, customHtml) {
     const id = 'gc-' + Math.random().toString(36).slice(2, 8);
     const bodyHtml = customHtml || \`<div class="gini-card-text" id="\${id}">\${escGini(text)}</div>\`;
     const copyTarget = customHtml ? '' : id;
@@ -2375,7 +2372,7 @@ app.get('/', async (req, res) => {
         \${bodyHtml}
         <div class="gini-card-actions">
           \${copyTarget ? \`<button class="btn-gini-copy" onclick="giniCopy('\${copyTarget}',this)">Copiar</button>\` : ''}
-          \${showScriptBtn ? \`<button class="btn-gini-script" onclick="giniGenerateScript('\${ytPayload}')">✍ Generar guión</button>\` : ''}
+          \${showScriptBtn ? \`<button class="btn-gini-script" onclick="giniGenerateScript()">✍ Generar guión</button>\` : ''}
         </div>
       </div>
     \`;
@@ -2396,30 +2393,25 @@ app.get('/', async (req, res) => {
     }).catch(() => {});
   }
 
-  function giniGenerateScript(payloadStr) {
-    // Parse the payload
-    let payload;
-    try { payload = JSON.parse(payloadStr); } catch(_) { payload = {}; }
+  function giniGenerateScript() {
+    // Read from the already-stored state — no risky inline HTML encoding
+    if (!_giniLastResult) return;
+    const hook = _giniLastResult.youtubeHook || '';
+    const idea = _giniLastIdea || '';
+    const prefill = (hook ? \`Hook de apertura: \${hook}\n\n\` : '') +
+                    (idea ? \`Idea original: \${idea}\` : '');
 
-    // Build the pre-filled content for the script generator
-    const prefill = (payload.youtubeHook ? \`Hook de apertura: \${payload.youtubeHook}\n\n\` : '') +
-                    (payload.idea ? \`Idea original: \${payload.idea}\` : '');
+    // Navigate to Repurposer where the textarea lives
+    showSection('repurposer');
 
-    // Switch to Outliers tab where the script generator lives
-    showSection('outliers');
-
-    // After the section is visible, try to pre-fill the guion input
     setTimeout(() => {
-      // Try the repurposer textarea first, then any guion input
-      const guionInput = document.getElementById('guion-input') ||
-                         document.querySelector('.guion-textarea') ||
-                         document.getElementById('repurpose-input');
-      if (guionInput) {
-        guionInput.value = prefill;
-        guionInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        guionInput.focus();
+      const ta = document.getElementById('repurpose-input');
+      if (ta) {
+        ta.value = prefill;
+        ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ta.focus();
       }
-    }, 300);
+    }, 200);
   }
 
   // Restore Gini result when user comes back to Hoy tab
