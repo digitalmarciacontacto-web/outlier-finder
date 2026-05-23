@@ -543,12 +543,23 @@ app.get('/', async (req, res) => {
     .income-modal-cancel { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .income-modal-save { background: #4f46e5; border: none; color: #fff; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
     .income-modal-save:hover { background: #4338ca; }
-    /* FB monetization note */
-    .fb-mono-note { margin-top: 20px; background: #0c1340; border: 1px solid #1d4ed8; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .fb-mono-note-text { flex: 1; font-size: 13px; color: #93c5fd; line-height: 1.5; }
-    .fb-mono-note-text strong { color: #bfdbfe; display: block; margin-bottom: 2px; }
-    .btn-fb-mono { background: #1d4ed8; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-    .btn-fb-mono:hover { background: #1e40af; }
+    /* FB sync panel */
+    .fb-sync-panel { margin-top: 20px; background: #0c1340; border: 1px solid #1d4ed8; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .fb-sync-left { display: flex; align-items: center; gap: 12px; }
+    .fb-sync-icon { width: 32px; height: 32px; background: #1877f2; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; color: #fff; flex-shrink: 0; }
+    .fb-sync-title { font-size: 14px; font-weight: 700; color: #bfdbfe; }
+    .fb-sync-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .fb-sync-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .fb-sync-result { font-size: 13px; color: #93c5fd; max-width: 320px; line-height: 1.4; }
+    .fb-sync-result.success { color: #34d399; }
+    .fb-sync-result.error { color: #f87171; }
+    .fb-sync-amount { font-size: 22px; font-weight: 800; color: #34d399; }
+    .btn-fb-sync { background: #1d4ed8; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .15s; }
+    .btn-fb-sync:hover { background: #1e40af; }
+    .btn-fb-sync:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-fb-instr-small { width: 28px; height: 28px; border-radius: 50%; background: #1a2a4a; border: 1px solid #2a3a65; color: #60a5fa; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .btn-fb-save-income { background: #065f46; border: 1px solid #10b981; color: #34d399; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: background .15s; }
+    .btn-fb-save-income:hover { background: #047857; }
     /* FB instructions modal */
     .fb-instr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 960; display: flex; align-items: center; justify-content: center; }
     .fb-instr-modal { background: #0f1729; border: 1px solid #1d4ed8; border-radius: 16px; padding: 28px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
@@ -840,13 +851,20 @@ app.get('/', async (req, res) => {
     <div class="metas-income-title">💰 Meta de ingresos</div>
     <div class="metas-income-grid" id="metas-income-grid"></div>
 
-    <!-- FB monetization note -->
-    <div class="fb-mono-note">
-      <div class="fb-mono-note-text">
-        <strong>🔌 Conectar monetización de Facebook automáticamente</strong>
-        Actualmente el ingreso se registra de forma manual. Puedes automatizarlo solicitando los permisos correctos en Meta for Developers.
+    <!-- FB sync panel -->
+    <div class="fb-sync-panel" id="fb-sync-panel">
+      <div class="fb-sync-left">
+        <div class="fb-sync-icon">f</div>
+        <div>
+          <div class="fb-sync-title">Monetización de Facebook</div>
+          <div class="fb-sync-sub" id="fb-sync-sub">Stars · Reels bonuses · Ad breaks</div>
+        </div>
       </div>
-      <button class="btn-fb-mono" onclick="showFbInstructions()">Ver instrucciones →</button>
+      <div class="fb-sync-right">
+        <div class="fb-sync-result" id="fb-sync-result" style="display:none;"></div>
+        <button class="btn-fb-sync" id="btn-fb-sync" onclick="syncFbIncome()">🔄 Sincronizar</button>
+        <button class="btn-fb-instr-small" onclick="showFbInstructions()" title="Ver instrucciones de permisos">?</button>
+      </div>
     </div>
   </div>
 
@@ -867,46 +885,55 @@ app.get('/', async (req, res) => {
   <!-- FB instructions modal -->
   <div class="fb-instr-overlay" id="fb-instr-overlay" style="display:none;" onclick="if(event.target===this)closeFbInstructions()">
     <div class="fb-instr-modal">
-      <div class="fb-instr-title">🔌 Cómo conectar la monetización de Facebook</div>
+      <div class="fb-instr-title">🔌 Conectar monetización de Facebook</div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:18px;">App ID: 1002253515636580 · permisos actuales: pages_read_engagement, business_management</div>
 
       <div class="fb-instr-step">
         <div class="fb-instr-num">1</div>
         <div class="fb-instr-body">
-          Entra a <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com/apps</a> y selecciona tu app (o créala si no la tienes).
+          <strong>Permiso que falta: <code>creator_monetization_insights</code></strong><br>
+          Los permisos actuales permiten leer métricas de página pero NO datos de ingresos (Stars, Reels bonuses, Ad Breaks earnings). Este permiso requiere revisión manual de Meta.
         </div>
       </div>
 
       <div class="fb-instr-step">
         <div class="fb-instr-num">2</div>
         <div class="fb-instr-body">
-          En el panel izquierdo ve a <strong>App Review → Permissions and Features</strong>. Busca y solicita estos dos permisos:
-          <div class="fb-instr-code">pages_read_engagement</div>
-          <div class="fb-instr-code">business_management</div>
-          Estos te dan acceso a métricas de la página y datos de monetización del Business Manager.
+          Ve a <a href="https://developers.facebook.com/apps/1002253515636580/app-review/permissions/" target="_blank" rel="noopener">App Review → Permissions and Features</a> en tu app y busca:
+          <div class="fb-instr-code">creator_monetization_insights</div>
+          Si no aparece en la lista, busca también:
+          <div class="fb-instr-code">monetization_insights</div>
         </div>
       </div>
 
       <div class="fb-instr-step">
         <div class="fb-instr-num">3</div>
         <div class="fb-instr-body">
-          Para justificar la solicitud a Meta, describe el caso de uso así: <br/>
-          <em>"Esta app obtiene datos de ingresos de monetización de Facebook (Creator Studio / Business Manager) para mostrarlos al propietario de la página en su propio dashboard privado. Solo el propietario usa la app."</em>
+          <strong>Primero activa modo Live</strong> en tu app (el botón de toggle arriba a la derecha en el panel). Sin modo Live, Meta no acepta solicitudes de permisos avanzados.
         </div>
       </div>
 
       <div class="fb-instr-step">
         <div class="fb-instr-num">4</div>
         <div class="fb-instr-body">
-          Una vez aprobado, el endpoint que se llamará será:
-          <div class="fb-instr-code">GET /me/monetization_insights?fields=estimated_earnings&access_token={token}</div>
-          Este retorna los ingresos estimados del período.
+          En la solicitud de App Review, describe el caso de uso así:<br>
+          <div class="fb-instr-code">"This app reads creator monetization data (Stars earnings, Reels bonuses, Ad Break earnings) from a Facebook Page owned by the app developer, to display aggregated income in a private personal dashboard. Only the page owner uses this app."</div>
         </div>
       </div>
 
       <div class="fb-instr-step">
         <div class="fb-instr-num">5</div>
         <div class="fb-instr-body">
-          Avísame cuando tengas los permisos aprobados y lo conecto directamente en el código para que se rellene automáticamente. 🚀
+          Una vez aprobado, el dashboard leerá automáticamente desde:<br>
+          <div class="fb-instr-code">GET /{page-id}/creator_monetization_details?fields=estimated_earnings_per_month,stars_summary,reels_summary</div>
+          y lo guardará en el mes correspondiente sin intervención manual. 🚀
+        </div>
+      </div>
+
+      <div class="fb-instr-step">
+        <div class="fb-instr-num">💡</div>
+        <div class="fb-instr-body">
+          <strong>Mientras tanto:</strong> usa el botón <code>+</code> en cada mes para registrar ingresos manualmente de forma acumulativa. Los montos se guardan en Redis y no se pierden entre sesiones.
         </div>
       </div>
 
@@ -2159,6 +2186,98 @@ app.get('/', async (req, res) => {
   }
   function closeFbInstructions() {
     document.getElementById('fb-instr-overlay').style.display = 'none';
+  }
+
+  // ── FB income sync ────────────────────────────────────────────────────────
+  const NEXT_STEP_MESSAGES = {
+    NEED_CREATOR_MONETIZATION: \`
+      <strong>Permiso adicional necesario: <code>creator_monetization_insights</code></strong><br>
+      Este permiso solo se otorga a apps en modo "Live" con revisión de Meta.<br>
+      <strong>Pasos:</strong><br>
+      1. Ve a <a href="https://developers.facebook.com/apps/1002253515636580/app-review/permissions/" target="_blank" style="color:#60a5fa;">App Review → Permissions</a><br>
+      2. Solicita <code>creator_monetization_insights</code><br>
+      3. Describe: <em>"Leer ingresos de monetización (Stars, Reels, Ad Breaks) de mi propia página para mostrarlos en mi dashboard personal privado."</em><br>
+      4. Cambia la app a modo Live antes de enviar.
+    \`,
+    CHECK_CREATOR_ELIGIBILITY: \`
+      <strong>Endpoint no disponible</strong><br>
+      La página puede no tener habilitada la monetización de creadores en Facebook.<br>
+      Verifica en <a href="https://www.facebook.com/creator/monetization" target="_blank" style="color:#60a5fa;">Facebook Creator Studio → Monetización</a> que Stars y Reels bonuses estén activos.
+    \`,
+    CHECK_TOKEN: \`
+      <strong>Error de API</strong><br>
+      Prueba reconectando el token en "Mi Canal → Conectar con Meta".
+    \`,
+  };
+
+  let _fbSyncResult = null;
+
+  async function syncFbIncome() {
+    const btn = document.getElementById('btn-fb-sync');
+    const resultEl = document.getElementById('fb-sync-result');
+    const subEl = document.getElementById('fb-sync-sub');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Consultando...';
+    resultEl.style.display = 'none';
+
+    try {
+      const r = await fetch('/facebook-income');
+      const d = await r.json();
+      _fbSyncResult = d;
+
+      resultEl.style.display = 'block';
+
+      if (d.ok) {
+        // SUCCESS — show amount + save button
+        const monthTag = new Date().toLocaleString('es', { month: 'long' }).toLowerCase();
+        resultEl.className = 'fb-sync-result success';
+        resultEl.innerHTML = \`
+          <div>📄 Fuente: <strong>\${d.page}</strong> · \${d.source}</div>
+          <div class="fb-sync-amount">$\${d.amount?.toFixed(2)} <span style="font-size:13px;font-weight:400;">\${d.currency} · \${d.period}</span></div>
+          <button class="btn-fb-save-income" onclick="saveFbIncomeToMonth('\${monthTag}',\${d.amount})">💾 Guardar en \${monthTag.charAt(0).toUpperCase()+monthTag.slice(1)}</button>
+        \`;
+        subEl.textContent = \`Último sync: \${new Date().toLocaleTimeString('es')}\`;
+      } else {
+        // ERROR — show diagnostic
+        resultEl.className = 'fb-sync-result error';
+        let detail = '';
+        if (d.nextStep && NEXT_STEP_MESSAGES[d.nextStep]) {
+          detail = \`<div class="fb-sync-next-step" style="margin-top:8px;padding:10px;background:#0f1729;border:1px solid #2a3a65;border-radius:8px;font-size:12px;color:#93c5fd;line-height:1.6;">\${NEXT_STEP_MESSAGES[d.nextStep]}</div>\`;
+        }
+        resultEl.innerHTML = \`
+          <div>⚠️ \${d.message}</div>
+          \${d.apiError ? \`<div style="font-size:11px;color:#6b7280;margin-top:3px;">API: \${d.apiError}</div>\` : ''}
+          \${detail}
+        \`;
+        subEl.textContent = 'No se pudieron leer datos automáticamente';
+      }
+    } catch (err) {
+      resultEl.style.display = 'block';
+      resultEl.className = 'fb-sync-result error';
+      resultEl.innerHTML = \`⚠️ Error de red: \${err.message}\`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 Sincronizar';
+    }
+  }
+
+  function saveFbIncomeToMonth(monthTag, amount) {
+    if (!amount || amount <= 0) return;
+    const key = 'income_' + monthTag;
+    const addsKey = 'income_adds_' + monthTag;
+    metasActuals[key] = (metasActuals[key] ?? 0) + amount;
+    if (!Array.isArray(metasActuals[addsKey])) metasActuals[addsKey] = [];
+    metasActuals[addsKey].push(parseFloat(amount.toFixed(2)));
+    saveActuals();
+    metasLoaded = false;
+    loadMetas();
+    // Update button feedback
+    const resultEl = document.getElementById('fb-sync-result');
+    if (resultEl) {
+      const saveBtn = resultEl.querySelector('.btn-fb-save-income');
+      if (saveBtn) { saveBtn.textContent = '✓ Guardado'; saveBtn.disabled = true; }
+    }
   }
 </script>
 <script src="/calendario.js"></script>
@@ -3635,6 +3754,139 @@ app.post('/api/ideas/:id/convert', async (req, res) => {
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
+});
+
+// ── GET /facebook-income ──────────────────────────────────────────────────────
+// Tries several Meta Graph API endpoints for monetization data in order of
+// specificity. Returns { ok, source, amount, currency, period, raw } or
+// { ok:false, code, message, nextStep }
+app.get('/facebook-income', async (req, res) => {
+  const metaToken = await loadMetaToken();
+  if (!metaToken) {
+    return res.json({ ok: false, code: 'NO_TOKEN', message: 'No hay token de Meta guardado. Ve a "Mi Canal" y conecta con Meta primero.' });
+  }
+
+  const BASE = 'https://graph.facebook.com/v19.0';
+
+  // ── 1. Resolve page ────────────────────────────────────────────────────────
+  let page = null;
+  let pageToken = metaToken;
+  try {
+    const pagesRes = await axios.get(`${BASE}/me/accounts`, {
+      params: { access_token: metaToken, fields: 'id,name,access_token' },
+    });
+    const pages = pagesRes.data.data || [];
+    page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
+    if (page) pageToken = page.access_token || metaToken;
+  } catch (e) {
+    const code = e.response?.data?.error?.code;
+    const msg  = e.response?.data?.error?.message || e.message;
+    if (code === 190 || /expired|invalid/i.test(msg)) {
+      return res.json({ ok: false, code: 'TOKEN_EXPIRED', message: 'El token de Meta expiró. Ve a "Mi Canal" y reconecta con Meta.', meta: msg });
+    }
+    return res.json({ ok: false, code: 'PAGES_ERROR', message: `Error al obtener páginas: ${msg}` });
+  }
+
+  if (!page) {
+    return res.json({ ok: false, code: 'NO_PAGE', message: 'No se encontró ninguna página de Facebook asociada a esta cuenta. Asegúrate de tener al menos una página administrada.' });
+  }
+
+  const pageId = page.id;
+  const pageName = page.name;
+
+  // ── 2. Date range: current calendar month ─────────────────────────────────
+  const now = new Date();
+  const since = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+  const until = Math.floor(now.getTime() / 1000);
+
+  // ── Helper: try a Graph API call, return { data } or { error } ────────────
+  async function tryEndpoint(url, params) {
+    try {
+      const r = await axios.get(url, { params: { ...params, access_token: pageToken } });
+      return { data: r.data };
+    } catch (e) {
+      return { error: { code: e.response?.data?.error?.code, type: e.response?.data?.error?.type, message: e.response?.data?.error?.message || e.message, subcode: e.response?.data?.error?.error_subcode } };
+    }
+  }
+
+  // ── 3. Attempt A: creator_monetization_details ────────────────────────────
+  const attemptA = await tryEndpoint(`${BASE}/${pageId}/creator_monetization_details`, { fields: 'estimated_earnings_per_month,stars_summary,reels_summary', since, until });
+  if (!attemptA.error) {
+    const d = attemptA.data;
+    const amount =
+      (d.estimated_earnings_per_month?.amount_in_cents ?? null) !== null
+        ? d.estimated_earnings_per_month.amount_in_cents / 100
+        : (d.stars_summary?.total_earnings_in_cents ?? null) !== null
+          ? (d.stars_summary.total_earnings_in_cents + (d.reels_summary?.total_earnings_in_cents ?? 0)) / 100
+          : null;
+    if (amount !== null) {
+      return res.json({ ok: true, source: 'creator_monetization_details', amount, currency: 'USD', page: pageName, period: 'mes actual', raw: d });
+    }
+  }
+
+  // ── 4. Attempt B: page insights — monetization metrics ────────────────────
+  const monetizationMetrics = 'page_daily_video_ad_break_earnings,page_daily_video_ad_break_ad_impressions';
+  const attemptB = await tryEndpoint(`${BASE}/${pageId}/insights`, { metric: monetizationMetrics, period: 'total_over_range', since, until });
+  if (!attemptB.error && attemptB.data?.data?.length > 0) {
+    const metrics = attemptB.data.data;
+    let totalEarnings = 0;
+    let found = false;
+    metrics.forEach(m => {
+      if (m.name === 'page_daily_video_ad_break_earnings') {
+        (m.values || []).forEach(v => { if (v.value) { totalEarnings += v.value; found = true; } });
+      }
+    });
+    if (found) {
+      return res.json({ ok: true, source: 'page_insights_ad_break', amount: Math.round(totalEarnings * 100) / 100, currency: 'USD', page: pageName, period: 'mes actual', raw: metrics });
+    }
+  }
+
+  // ── 5. Attempt C: Stars transactions ─────────────────────────────────────
+  const attemptC = await tryEndpoint(`${BASE}/${pageId}/video_lists`, { fields: 'videos{video_insights{name,values}}', limit: 5 });
+  // Just check if accessible — Stars earnings data is not in this endpoint, but tests reachability.
+
+  // ── 6. Attempt D: profile-level monetization (personal profile) ───────────
+  const attemptD = await tryEndpoint(`${BASE}/me/monetization_eligibilities`, { fields: 'monetization_product,status' });
+
+  // ── 7. Diagnose why nothing worked ────────────────────────────────────────
+  // Collect the most useful error to surface
+  const primaryError = attemptA.error || attemptB.error;
+  const errorCode    = primaryError?.code;
+  const errorMsg     = primaryError?.message || 'Desconocido';
+  const errorType    = primaryError?.type || '';
+
+  // Permission error (code 10, 200, 294, or type OAuthException + "#10")
+  if (errorCode === 10 || errorCode === 200 || errorCode === 294 || /permission|access/i.test(errorMsg)) {
+    return res.json({
+      ok: false,
+      code: 'PERMISSION_MISSING',
+      message: `Los permisos actuales (pages_read_engagement, business_management) no son suficientes para leer datos de monetización.`,
+      page: pageName,
+      apiError: errorMsg,
+      nextStep: 'NEED_CREATOR_MONETIZATION',
+    });
+  }
+
+  // Endpoint doesn't exist / not in test mode
+  if (errorCode === 100 || /does not exist|unsupported/i.test(errorMsg)) {
+    return res.json({
+      ok: false,
+      code: 'ENDPOINT_UNAVAILABLE',
+      message: `El endpoint de monetización no está disponible para esta página o tipo de cuenta.`,
+      page: pageName,
+      apiError: errorMsg,
+      nextStep: 'CHECK_CREATOR_ELIGIBILITY',
+    });
+  }
+
+  // Generic fallback
+  return res.json({
+    ok: false,
+    code: 'API_ERROR',
+    message: errorMsg,
+    page: pageName,
+    nextStep: 'CHECK_TOKEN',
+  });
 });
 
 // ── GET /published/:date ───────────────────────────────────────────────────────
