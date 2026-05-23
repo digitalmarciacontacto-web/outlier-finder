@@ -1750,8 +1750,8 @@ app.get('/', async (req, res) => {
     document.getElementById('metas-cur-name').textContent = cur.name;
     document.getElementById('metas-cur-desc').textContent = cur.desc;
     const _now = new Date();
-    const _lastDay = new Date(_now.getFullYear(), cur.monthIndex, 0).getDate();
-    const _daysLeft = (_now.getMonth() + 1 === cur.monthIndex) ? Math.max(0, _lastDay - _now.getDate()) : (_now.getMonth() + 1 < cur.monthIndex ? _lastDay : 0);
+    const _lastDay = new Date(_now.getFullYear(), cur.monthIndex + 1, 0).getDate();
+    const _daysLeft = (_now.getMonth() === cur.monthIndex) ? Math.max(0, _lastDay - _now.getDate()) : (_now.getMonth() < cur.monthIndex ? _lastDay : 0);
     document.getElementById('metas-cur-days').textContent = _daysLeft + ' días restantes';
     renderPlatforms('metas-cur-platforms', cur.tag, cur.goals, actuals, true);
 
