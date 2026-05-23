@@ -237,6 +237,46 @@ app.get('/', async (req, res) => {
     .hoy-pub-btn.hoy-pub-btn-done { background: #052e16; border-color: #10b981; color: #34d399; cursor: default; }
     .hoy-pub-btn:disabled { opacity: .6; cursor: not-allowed; }
 
+    /* ── Gini chat component ── */
+    .gini-section { margin-top: 36px; border-top: 1px solid #2a2a2a; padding-top: 32px; }
+    .gini-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .gini-title { font-size: 19px; font-weight: 800; color: #e2e8f0; }
+    .gini-subtitle { font-size: 13px; color: #6b7280; margin-bottom: 18px; }
+    .gini-input-wrap { position: relative; }
+    .gini-textarea { width: 100%; min-height: 110px; background: #141420; border: 1.5px solid #2a2a3a; border-radius: 12px; color: #e2e8f0; font-size: 14px; line-height: 1.65; padding: 16px; resize: vertical; font-family: inherit; outline: none; transition: border-color .2s; }
+    .gini-textarea:focus { border-color: #6C63FF; }
+    .gini-textarea::placeholder { color: #4b5563; }
+    .gini-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .btn-gini-process { background: linear-gradient(135deg, #6C63FF, #4f46e5); border: none; color: #fff; padding: 11px 24px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; white-space: nowrap; }
+    .btn-gini-process:hover { opacity: .88; }
+    .btn-gini-process:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-gini-new { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; display: none; }
+    .btn-gini-new:hover { background: #252535; }
+    .gini-loading { display: none; align-items: center; gap: 10px; color: #a78bfa; font-size: 13px; padding: 12px 0; }
+    .gini-result { display: none; margin-top: 24px; }
+    /* Classification tags */
+    .gini-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .gini-tag { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; }
+    .gini-tag-pilar { background: #1e1b4b; color: #a78bfa; border: 1px solid #4f46e5; }
+    .gini-tag-funnel { background: #0c2a1a; color: #34d399; border: 1px solid #065f46; }
+    .gini-tag-platform { background: #1a1a2a; color: #93c5fd; border: 1px solid #1d4ed8; }
+    .gini-anti { background: #1a1000; border: 1px solid #78350f; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #fcd34d; line-height: 1.5; }
+    .gini-anti strong { display: block; color: #f59e0b; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    /* Output cards grid */
+    .gini-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .gini-card { background: #141420; border: 1px solid #2a2a3a; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .gini-card-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #6C63FF; }
+    .gini-card-text { font-size: 13px; color: #cbd5e1; line-height: 1.65; white-space: pre-wrap; flex: 1; }
+    .gini-card-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+    .btn-gini-copy { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .btn-gini-copy:hover { background: #252535; color: #e2e8f0; }
+    .btn-gini-copy.copied { border-color: #10b981; color: #34d399; }
+    .btn-gini-script { background: #1e1b4b; border: 1px solid #4f46e5; color: #a78bfa; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .btn-gini-script:hover { background: #312e81; }
+    /* Repurposer list */
+    .gini-repurpose-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .gini-repurpose-list li { font-size: 13px; color: #cbd5e1; line-height: 1.5; padding: 8px 10px; background: #1a1a2a; border-radius: 7px; }
+
     /* ── OUTLIERS ── */
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
     .section-title { font-size: 20px; font-weight: 800; color: #e2e8f0; }
@@ -682,6 +722,33 @@ app.get('/', async (req, res) => {
     <div class="hoy-pub-grid" id="hoy-pub-grid">
       <div class="spinner" style="margin:auto;border-top-color:#6C63FF;"></div>
     </div>
+  </div>
+
+  <!-- ── Gini — procesador de ideas ── -->
+  <div class="gini-section">
+    <div class="gini-header">
+      <span style="font-size:24px;">💡</span>
+      <h3 class="gini-title">¿Qué tienes en mente hoy?</h3>
+    </div>
+    <div class="gini-subtitle">Escribe una idea, un pensamiento, algo que viviste... Gini lo convierte en contenido para tu ecosistema.</div>
+
+    <div class="gini-input-wrap">
+      <textarea id="gini-input" class="gini-textarea"
+        placeholder="Escribe una idea, un pensamiento, algo que viviste... Gini lo convierte en contenido para tu ecosistema."></textarea>
+    </div>
+
+    <div class="gini-actions">
+      <button class="btn-gini-process" id="btn-gini-process" onclick="processWithGini()">✨ Procesar con Gini</button>
+      <button class="btn-gini-new" id="btn-gini-new" onclick="giniReset()">+ Nueva idea</button>
+    </div>
+
+    <div class="gini-loading" id="gini-loading">
+      <div class="spinner" style="border-top-color:#a78bfa;width:18px;height:18px;border-width:2px;"></div>
+      <span>Gini está procesando tu idea...</span>
+    </div>
+
+    <!-- Result area — persistent until user resets -->
+    <div class="gini-result" id="gini-result"></div>
   </div>
 </section>
 
@@ -2182,6 +2249,198 @@ app.get('/', async (req, res) => {
       closeFbInstructions();
     }
   });
+
+  // ── Gini idea processor ───────────────────────────────────────────────────
+  // State is kept in module-level vars so it survives tab switches
+  let _giniLastResult = null;
+  let _giniLastIdea   = '';
+
+  // Restore state when section-hoy becomes active
+  const _origShowSection = showSection;
+  // (patched below after showSection is defined — see DOMContentLoaded hook)
+
+  function processWithGini() {
+    const input = document.getElementById('gini-input');
+    const idea  = input ? input.value.trim() : '';
+    if (!idea) { input && input.focus(); return; }
+
+    const btn       = document.getElementById('btn-gini-process');
+    const loading   = document.getElementById('gini-loading');
+    const resultEl  = document.getElementById('gini-result');
+
+    btn.disabled = true;
+    loading.style.display = 'flex';
+    resultEl.style.display = 'none';
+
+    fetch('/gini-process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea }),
+    })
+    .then(r => r.json())
+    .then(d => {
+      loading.style.display = 'none';
+      btn.disabled = false;
+      if (!d.ok) { alert('Error: ' + (d.error || 'desconocido')); return; }
+      _giniLastResult = d.result;
+      _giniLastIdea   = idea;
+      renderGiniResult(d.result, idea);
+    })
+    .catch(err => {
+      loading.style.display = 'none';
+      btn.disabled = false;
+      alert('Error de red: ' + err.message);
+    });
+  }
+
+  function giniReset() {
+    _giniLastResult = null;
+    _giniLastIdea   = '';
+    const input   = document.getElementById('gini-input');
+    const resultEl = document.getElementById('gini-result');
+    const newBtn  = document.getElementById('btn-gini-new');
+    const procBtn = document.getElementById('btn-gini-process');
+    if (input)   { input.value = ''; input.style.display = ''; input.focus(); }
+    if (resultEl) resultEl.style.display = 'none';
+    if (newBtn)  newBtn.style.display = 'none';
+    if (procBtn) procBtn.style.display = '';
+  }
+
+  function renderGiniResult(r, idea) {
+    const resultEl = document.getElementById('gini-result');
+    const input    = document.getElementById('gini-input');
+    const newBtn   = document.getElementById('btn-gini-new');
+    const procBtn  = document.getElementById('btn-gini-process');
+    if (!resultEl) return;
+
+    // Hide textarea after processing, show "Nueva idea" button
+    if (input)   input.style.display = 'none';
+    if (procBtn) procBtn.style.display = 'none';
+    if (newBtn)  newBtn.style.display = '';
+
+    const pilarColor = {
+      'El Escenario':        '#6C63FF',
+      'El Proceso':          '#22d3ee',
+      'La Tensión':          '#f59e0b',
+      'La Vida Construida':  '#10b981',
+    }[r.pilar] || '#6C63FF';
+
+    const repurposerHtml = r.repurposer && r.repurposer.length
+      ? \`<ul class="gini-repurpose-list">\${r.repurposer.map(item => \`<li>\${escGini(item)}</li>\`).join('')}</ul>\`
+      : '<span style="color:#6b7280;">Sin ideas de repurpose</span>';
+
+    // Build youtube hook payload for "Generar guión" button
+    const ytPayload = JSON.stringify({ youtubeHook: r.youtubeHook, idea }).replace(/'/g, "\\'");
+
+    resultEl.innerHTML = \`
+      <!-- Classification tags -->
+      <div class="gini-tags">
+        <span class="gini-tag gini-tag-pilar" style="background:\${pilarColor}22;border-color:\${pilarColor};color:\${pilarColor};">\${r.pilarEmoji} \${r.pilar}</span>
+        <span class="gini-tag gini-tag-funnel">Funnel \${r.nivelFunnel}</span>
+        <span class="gini-tag gini-tag-platform">📍 \${r.plataforma}</span>
+        <span style="font-size:12px;color:#6b7280;align-self:center;margin-left:4px;">\${r.razon}</span>
+      </div>
+
+      \${r.antiDispersion ? \`
+      <div class="gini-anti">
+        <strong>⚡ Anti-dispersión</strong>
+        \${escGini(r.antiDispersion)}
+      </div>\` : ''}
+
+      <div class="gini-cards-grid">
+        \${giniCard('▶ YouTube Hook', r.youtubeHook, true, ytPayload)}
+        \${giniCard('♪ TikTok Hook', r.tiktokHook)}
+        \${giniCard('🔵 Facebook Post', r.facebookPost)}
+        \${giniCard('📧 Newsletter', r.newsletter)}
+        \${giniCard('♻️ Repurposer', '', false, '', repurposerHtml)}
+        \${giniCard('🎯 CTA', r.cta)}
+      </div>
+
+      <div style="margin-top:14px;font-size:11px;color:#374151;">
+        💰 Costo: $\${r._cost} USD · idea procesada \${new Date().toLocaleTimeString('es')}
+      </div>
+    \`;
+
+    resultEl.style.display = 'block';
+    resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function giniCard(label, text, showScriptBtn, ytPayload, customHtml) {
+    const id = 'gc-' + Math.random().toString(36).slice(2, 8);
+    const bodyHtml = customHtml || \`<div class="gini-card-text" id="\${id}">\${escGini(text)}</div>\`;
+    const copyTarget = customHtml ? '' : id;
+    return \`
+      <div class="gini-card">
+        <div class="gini-card-label">\${label}</div>
+        \${bodyHtml}
+        <div class="gini-card-actions">
+          \${copyTarget ? \`<button class="btn-gini-copy" onclick="giniCopy('\${copyTarget}',this)">Copiar</button>\` : ''}
+          \${showScriptBtn ? \`<button class="btn-gini-script" onclick="giniGenerateScript('\${ytPayload}')">✍ Generar guión</button>\` : ''}
+        </div>
+      </div>
+    \`;
+  }
+
+  function escGini(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function giniCopy(elemId, btn) {
+    const el = document.getElementById(elemId);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent || el.innerText).then(() => {
+      btn.textContent = '✓ Copiado';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {});
+  }
+
+  function giniGenerateScript(payloadStr) {
+    // Parse the payload
+    let payload;
+    try { payload = JSON.parse(payloadStr); } catch(_) { payload = {}; }
+
+    // Build the pre-filled content for the script generator
+    const prefill = (payload.youtubeHook ? \`Hook de apertura: \${payload.youtubeHook}\n\n\` : '') +
+                    (payload.idea ? \`Idea original: \${payload.idea}\` : '');
+
+    // Switch to Outliers tab where the script generator lives
+    showSection('outliers');
+
+    // After the section is visible, try to pre-fill the guion input
+    setTimeout(() => {
+      // Try the repurposer textarea first, then any guion input
+      const guionInput = document.getElementById('guion-input') ||
+                         document.querySelector('.guion-textarea') ||
+                         document.getElementById('repurpose-input');
+      if (guionInput) {
+        guionInput.value = prefill;
+        guionInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        guionInput.focus();
+      }
+    }, 300);
+  }
+
+  // Restore Gini result when user comes back to Hoy tab
+  document.addEventListener('DOMContentLoaded', () => {});
+  // Patch showSection to re-render if returning to hoy with a cached result
+  (function patchShowSection() {
+    const orig = showSection;
+    window.showSection = function(id) {
+      orig(id);
+      if (id === 'hoy' && _giniLastResult) {
+        // Re-render result and keep input hidden
+        const input  = document.getElementById('gini-input');
+        const procBtn = document.getElementById('btn-gini-process');
+        if (input)   input.style.display = 'none';
+        if (procBtn) procBtn.style.display = 'none';
+        const newBtn = document.getElementById('btn-gini-new');
+        if (newBtn) newBtn.style.display = '';
+        renderGiniResult(_giniLastResult, _giniLastIdea);
+      }
+    };
+  })();
 
   // ── FB instructions modal ─────────────────────────────────────────────────
   function showFbInstructions() {
@@ -3962,6 +4221,83 @@ app.get('/facebook-income', async (req, res) => {
     page: pageName,
     nextStep: 'CHECK_TOKEN',
   });
+});
+
+// ── POST /gini-process ────────────────────────────────────────────────────────
+app.post('/gini-process', async (req, res) => {
+  const { idea } = req.body;
+  if (!idea || !idea.trim()) return res.status(400).json({ error: 'Falta la idea.' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
+
+  const userPrompt = `IDEA DE MARCIA:
+"${idea.trim().slice(0, 2000)}"
+
+Procesa esta idea con el brand blueprint completo de Marcia y responde EXACTAMENTE en este formato (una línea por campo, sin markdown adicional):
+
+PILAR: [El Escenario / El Proceso / La Tensión / La Vida Construida]
+PILAR_EMOJI: [🌍 / 🔄 / 💥 / 💑]
+NIVEL_FUNNEL: [1-Descubrimiento / 2-Identificación / 3-Profundidad / 4-Pertenencia]
+PLATAFORMA: [plataforma principal recomendada]
+RAZON: [1 frase corta explicando la clasificación]
+YOUTUBE_HOOK: [hook de apertura para video largo, en voz de Marcia — concreto, personal, 2-3 oraciones]
+TIKTOK_HOOK: [hook para TikTok — primeros 3 segundos, directo y emocional, desde experiencia real]
+FACEBOOK_POST: [post completo 120-160 palabras, personal, narrativo, sin emojis, sin bullets de IA]
+NEWSLETTER: [ángulo para carta/email, 70-90 palabras, íntimo, primera persona]
+REPURPOSER:
+- [idea Threads 1 — max 500 chars]
+- [idea Pinterest — título SEO + 1 línea de descripción]
+- [idea Threads 3 — ángulo diferente al primero]
+CTA: [CTA conectado al nivel del funnel — natural, no forzado]
+ANTI_DISPERSION: [¿Vale la pena desarrollar esta idea? 1-2 frases honestas. Si no encaja, dilo sin rodeos.]`;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const raw = message.content[0].text.trim();
+    trackUsage('gini-process', message.usage.input_tokens, message.usage.output_tokens).catch(() => {});
+
+    // Parse the structured response
+    const get = (key) => {
+      const regex = new RegExp(`^${key}:\\s*(.+)`, 'm');
+      const m = raw.match(regex);
+      return m ? m[1].trim() : '';
+    };
+
+    // REPURPOSER is multi-line
+    const repurposerMatch = raw.match(/REPURPOSER:\s*([\s\S]*?)(?:\nCTA:|$)/);
+    const repurposerLines = repurposerMatch
+      ? repurposerMatch[1].split('\n').map(l => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean)
+      : [];
+
+    const result = {
+      pilar: get('PILAR'),
+      pilarEmoji: get('PILAR_EMOJI'),
+      nivelFunnel: get('NIVEL_FUNNEL'),
+      plataforma: get('PLATAFORMA'),
+      razon: get('RAZON'),
+      youtubeHook: get('YOUTUBE_HOOK'),
+      tiktokHook: get('TIKTOK_HOOK'),
+      facebookPost: get('FACEBOOK_POST'),
+      newsletter: get('NEWSLETTER'),
+      repurposer: repurposerLines,
+      cta: get('CTA'),
+      antiDispersion: get('ANTI_DISPERSION'),
+      _cost: (message.usage.input_tokens / 1000 * 0.003 + message.usage.output_tokens / 1000 * 0.015).toFixed(4),
+      _raw: raw,
+    };
+
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── GET /published/:date ───────────────────────────────────────────────────────
