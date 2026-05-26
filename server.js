@@ -3941,6 +3941,7 @@ app.post('/analyze-pattern', async (req, res) => {
     });
     const raw = message.content[0].text.trim();
     const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    trackUsage('analyze-pattern', message.usage.input_tokens, message.usage.output_tokens).catch(() => {});
     res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
