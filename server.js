@@ -752,6 +752,7 @@ app.get('/', async (req, res) => {
       .idea-board { grid-template-columns: 1fr; }
       .week-grid { grid-template-columns: repeat(2, 1fr); }
     }
+    .crear-section-title { font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
   </style>
 </head>
 <body>
@@ -764,11 +765,9 @@ app.get('/', async (req, res) => {
   <nav class="header-nav">
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
-    <button class="nav-tab" data-section="hooks" onclick="showSection('hooks')">🔖 Hooks</button>
+    <button class="nav-tab" data-section="crear" onclick="showSection('crear')">📋 Crear</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
-    <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
-    <button class="nav-tab" data-section="ideas-kanban" onclick="showSection('ideas-kanban')">💡 Ideas</button>
     <button class="nav-tab" data-section="analytics" onclick="showSection('analytics')">📊 Analytics</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
@@ -949,7 +948,69 @@ app.get('/', async (req, res) => {
 </section>
 
 <!-- ── HOOK VAULT ── -->
-<section id="section-hooks" class="section">
+<section id="section-crear" class="section">
+
+  <!-- ── Calendario ── -->
+  <div id="cal-module" class="cal-module">
+    <!-- toolbar -->
+    <div class="cal-toolbar">
+      <div class="cal-view-switcher">
+        <button class="cal-view-btn active" data-view="month" onclick="calSwitchView('month',this)">📅 Mes</button>
+        <button class="cal-view-btn" data-view="list" onclick="calSwitchView('list',this)">☰ Lista</button>
+        <button class="cal-view-btn" data-view="ideas" onclick="calSwitchView('ideas',this)">💡 Ideas</button>
+      </div>
+      <div class="cal-nav" id="cal-nav">
+        <button onclick="calPrevMonth()">‹</button>
+        <span id="cal-month-label"></span>
+        <button onclick="calNextMonth()">›</button>
+        <button onclick="calGoToday()">Hoy</button>
+      </div>
+      <div class="cal-platform-filters" id="cal-platform-filters"></div>
+      <button class="btn-gen" onclick="openPostModal()">+ Nuevo post</button>
+    </div>
+    <!-- Stats bar -->
+    <div class="cal-stats-bar" id="cal-stats-bar"></div>
+    <!-- Main content area (month grid / list / ideas) -->
+    <div id="cal-content"></div>
+  </div>
+
+  <!-- Post modal overlay -->
+  <div class="cal-modal-overlay" id="cal-modal-overlay" style="display:none;" onclick="if(event.target===this)closePostModal()">
+    <div class="cal-modal" id="cal-modal">
+      <div class="cal-modal-header">
+        <span id="cal-modal-title">Nuevo post</span>
+        <button onclick="closePostModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div class="cal-modal-split">
+        <div class="cal-modal-form" id="cal-modal-form"></div>
+        <div class="cal-modal-preview">
+          <div class="cal-preview-label">Preview</div>
+          <div class="cal-preview-card" id="cal-preview-card">
+            <div id="prev-hook" style="font-weight:700;margin-bottom:8px;"></div>
+            <div id="prev-body" style="font-size:14px;color:#9898b0;white-space:pre-wrap;"></div>
+            <div id="prev-cta" style="margin-top:8px;color:#6C63FF;font-size:13px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="cal-modal-footer" id="cal-modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Idea modal overlay -->
+  <div class="cal-modal-overlay" id="idea-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaModal()">
+    <div class="cal-modal" id="idea-modal" style="max-width:480px;">
+      <div class="cal-modal-header">
+        <span id="idea-modal-title">Nueva idea</span>
+        <button onclick="closeIdeaModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:20px;" id="idea-modal-form"></div>
+      <div class="cal-modal-footer" id="idea-modal-footer"></div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#1e293b;margin:48px 0;"></div>
+
+  <!-- ── Hooks ── -->
   <div class="section-header">
     <h2 class="section-title">🔖 Hook Vault</h2>
     <button class="btn-gen" onclick="openHvModal()">+ Nuevo hook</button>
@@ -1008,6 +1069,75 @@ app.get('/', async (req, res) => {
       </div>
     </div>
   </div>
+
+  <div style="height:1px;background:#1e293b;margin:48px 0;"></div>
+
+  <!-- ── Ideas Kanban ── -->
+  <div class="section-header">
+    <h2 class="section-title">💡 Ideas</h2>
+    <button class="btn-gen" onclick="openIdeaKanbanModal()">+ Nueva idea</button>
+  </div>
+  <div class="kanban-board" id="kanban-board">
+    <div class="kanban-col" data-stage="idea">
+      <div class="kanban-col-header">💡 Idea</div>
+      <div class="kanban-cards" id="kanban-idea"></div>
+    </div>
+    <div class="kanban-col" data-stage="guion">
+      <div class="kanban-col-header">📝 Guión listo</div>
+      <div class="kanban-cards" id="kanban-guion"></div>
+    </div>
+    <div class="kanban-col" data-stage="filmado">
+      <div class="kanban-col-header">🎬 Filmado</div>
+      <div class="kanban-cards" id="kanban-filmado"></div>
+    </div>
+    <div class="kanban-col" data-stage="editado">
+      <div class="kanban-col-header">✂️ Editado</div>
+      <div class="kanban-cards" id="kanban-editado"></div>
+    </div>
+    <div class="kanban-col" data-stage="publicado">
+      <div class="kanban-col-header">✅ Publicado</div>
+      <div class="kanban-cards" id="kanban-publicado"></div>
+    </div>
+  </div>
+
+  <!-- Nueva idea modal -->
+  <div class="kanban-modal-overlay" id="kanban-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaKanbanModal()">
+    <div class="kanban-modal" id="kanban-modal">
+      <div class="kanban-modal-header">
+        <span id="kanban-modal-title">Nueva idea</span>
+        <button onclick="closeIdeaKanbanModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div class="kanban-modal-body">
+        <label class="kanban-label">Título *</label>
+        <input type="text" id="ki-title" class="kanban-input" placeholder="¿De qué trata tu idea?">
+        <label class="kanban-label">Pilar de contenido</label>
+        <select id="ki-pillar" class="kanban-input">
+          <option value="">Sin pilar</option>
+          <option value="🌍 Escenario">🌍 Escenario</option>
+          <option value="🔄 Proceso">🔄 Proceso</option>
+          <option value="💥 Tensión">💥 Tensión</option>
+          <option value="💑 Vida construida">💑 Vida construida</option>
+        </select>
+        <label class="kanban-label">Plataforma principal</label>
+        <select id="ki-platform" class="kanban-input">
+          <option value="">Sin plataforma</option>
+          <option value="YouTube">YouTube</option>
+          <option value="Instagram">Instagram</option>
+          <option value="TikTok">TikTok</option>
+          <option value="Threads">Threads</option>
+          <option value="Facebook">Facebook</option>
+          <option value="Pinterest">Pinterest</option>
+        </select>
+        <label class="kanban-label">Notas</label>
+        <textarea id="ki-notes" class="kanban-input" rows="3" placeholder="Contexto, referencias, ángulo..."></textarea>
+      </div>
+      <div class="kanban-modal-footer">
+        <button class="kanban-btn-cancel" onclick="closeIdeaKanbanModal()">Cancelar</button>
+        <button class="kanban-btn-save" onclick="saveIdeaKanban()">Guardar idea</button>
+      </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ── METAS ── -->
@@ -1133,67 +1263,6 @@ app.get('/', async (req, res) => {
 
 </section>
 
-<!-- ── CALENDARIO ── -->
-<section id="section-calendario" class="section">
-  <div id="cal-module" class="cal-module">
-    <!-- toolbar -->
-    <div class="cal-toolbar">
-      <div class="cal-view-switcher">
-        <button class="cal-view-btn active" data-view="month" onclick="calSwitchView('month',this)">📅 Mes</button>
-        <button class="cal-view-btn" data-view="list" onclick="calSwitchView('list',this)">☰ Lista</button>
-        <button class="cal-view-btn" data-view="ideas" onclick="calSwitchView('ideas',this)">💡 Ideas</button>
-      </div>
-      <div class="cal-nav" id="cal-nav">
-        <button onclick="calPrevMonth()">‹</button>
-        <span id="cal-month-label"></span>
-        <button onclick="calNextMonth()">›</button>
-        <button onclick="calGoToday()">Hoy</button>
-      </div>
-      <div class="cal-platform-filters" id="cal-platform-filters"></div>
-      <button class="btn-gen" onclick="openPostModal()">+ Nuevo post</button>
-    </div>
-    <!-- Stats bar -->
-    <div class="cal-stats-bar" id="cal-stats-bar"></div>
-    <!-- Main content area (month grid / list / ideas) -->
-    <div id="cal-content"></div>
-  </div>
-
-  <!-- Post modal overlay -->
-  <div class="cal-modal-overlay" id="cal-modal-overlay" style="display:none;" onclick="if(event.target===this)closePostModal()">
-    <div class="cal-modal" id="cal-modal">
-      <div class="cal-modal-header">
-        <span id="cal-modal-title">Nuevo post</span>
-        <button onclick="closePostModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div class="cal-modal-split">
-        <div class="cal-modal-form" id="cal-modal-form"></div>
-        <div class="cal-modal-preview">
-          <div class="cal-preview-label">Preview</div>
-          <div class="cal-preview-card" id="cal-preview-card">
-            <div id="prev-hook" style="font-weight:700;margin-bottom:8px;"></div>
-            <div id="prev-body" style="font-size:14px;color:#9898b0;white-space:pre-wrap;"></div>
-            <div id="prev-cta" style="margin-top:8px;color:#6C63FF;font-size:13px;"></div>
-          </div>
-        </div>
-      </div>
-      <div class="cal-modal-footer" id="cal-modal-footer"></div>
-    </div>
-  </div>
-
-  <!-- Idea modal overlay -->
-  <div class="cal-modal-overlay" id="idea-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaModal()">
-    <div class="cal-modal" id="idea-modal" style="max-width:480px;">
-      <div class="cal-modal-header">
-        <span id="idea-modal-title">Nueva idea</span>
-        <button onclick="closeIdeaModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div style="padding:20px;" id="idea-modal-form"></div>
-      <div class="cal-modal-footer" id="idea-modal-footer"></div>
-    </div>
-  </div>
-
-</section>
-
 <!-- ── REPURPOSER ── -->
 <section id="section-repurposer" class="section">
   <div class="section-header">
@@ -1210,73 +1279,6 @@ app.get('/', async (req, res) => {
   <div class="posts-grid" id="posts-grid"></div>
 </section>
 
-<!-- ── IDEAS KANBAN ── -->
-<section id="section-ideas-kanban" class="section">
-  <div class="section-header">
-    <h2 class="section-title">💡 Ideas</h2>
-    <button class="btn-gen" onclick="openIdeaKanbanModal()">+ Nueva idea</button>
-  </div>
-  <div class="kanban-board" id="kanban-board">
-    <div class="kanban-col" data-stage="idea">
-      <div class="kanban-col-header">💡 Idea</div>
-      <div class="kanban-cards" id="kanban-idea"></div>
-    </div>
-    <div class="kanban-col" data-stage="guion">
-      <div class="kanban-col-header">📝 Guión listo</div>
-      <div class="kanban-cards" id="kanban-guion"></div>
-    </div>
-    <div class="kanban-col" data-stage="filmado">
-      <div class="kanban-col-header">🎬 Filmado</div>
-      <div class="kanban-cards" id="kanban-filmado"></div>
-    </div>
-    <div class="kanban-col" data-stage="editado">
-      <div class="kanban-col-header">✂️ Editado</div>
-      <div class="kanban-cards" id="kanban-editado"></div>
-    </div>
-    <div class="kanban-col" data-stage="publicado">
-      <div class="kanban-col-header">✅ Publicado</div>
-      <div class="kanban-cards" id="kanban-publicado"></div>
-    </div>
-  </div>
-
-  <!-- Nueva idea modal -->
-  <div class="kanban-modal-overlay" id="kanban-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaKanbanModal()">
-    <div class="kanban-modal" id="kanban-modal">
-      <div class="kanban-modal-header">
-        <span id="kanban-modal-title">Nueva idea</span>
-        <button onclick="closeIdeaKanbanModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div class="kanban-modal-body">
-        <label class="kanban-label">Título *</label>
-        <input type="text" id="ki-title" class="kanban-input" placeholder="¿De qué trata tu idea?">
-        <label class="kanban-label">Pilar de contenido</label>
-        <select id="ki-pillar" class="kanban-input">
-          <option value="">Sin pilar</option>
-          <option value="🌍 Escenario">🌍 Escenario</option>
-          <option value="🔄 Proceso">🔄 Proceso</option>
-          <option value="💥 Tensión">💥 Tensión</option>
-          <option value="💑 Vida construida">💑 Vida construida</option>
-        </select>
-        <label class="kanban-label">Plataforma principal</label>
-        <select id="ki-platform" class="kanban-input">
-          <option value="">Sin plataforma</option>
-          <option value="YouTube">YouTube</option>
-          <option value="Instagram">Instagram</option>
-          <option value="TikTok">TikTok</option>
-          <option value="Threads">Threads</option>
-          <option value="Facebook">Facebook</option>
-          <option value="Pinterest">Pinterest</option>
-        </select>
-        <label class="kanban-label">Notas</label>
-        <textarea id="ki-notes" class="kanban-input" rows="3" placeholder="Contexto, referencias, ángulo..."></textarea>
-      </div>
-      <div class="kanban-modal-footer">
-        <button class="kanban-btn-cancel" onclick="closeIdeaKanbanModal()">Cancelar</button>
-        <button class="kanban-btn-save" onclick="saveIdeaKanban()">Guardar idea</button>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ── ANALYTICS SEMANAL ── -->
 <section id="section-analytics" class="section">
@@ -1343,10 +1345,8 @@ app.get('/', async (req, res) => {
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
     if (id === 'hoy') loadHoyCanal();
-    if (id === 'hooks') loadHookVault();
+    if (id === 'crear') { loadHookVault(); loadCalendario(); loadKanban(); }
     if (id === 'metas') loadMetas();
-    if (id === 'calendario') loadCalendario();
-    if (id === 'ideas-kanban') loadKanban();
     if (id === 'analytics') loadAnalytics();
   }
 
