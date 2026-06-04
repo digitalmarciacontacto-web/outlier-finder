@@ -382,6 +382,26 @@ app.get('/', async (req, res) => {
     .btn-manage-channels { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s; }
     .btn-manage-channels:hover { background: #374151; color: #e2e8f0; }
 
+    /* ── Analytics semanal ── */
+    .btn-registrar-semana { background: #059669; border: none; color: #fff; padding: 9px 20px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background .2s; }
+    .btn-registrar-semana:hover { background: #047857; }
+    .btn-registrar-semana:disabled { background: #1f2937; color: #4b5563; cursor: not-allowed; }
+    .analytics-notice { font-size: 13px; margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; background: #0d1117; border: 1px solid #1e293b; }
+    .analytics-empty { background: #111; border: 1px dashed #2a2a2a; border-radius: 12px; padding: 48px 24px; text-align: center; color: #6b7280; font-size: 14px; }
+    .analytics-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #1e293b; }
+    .analytics-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .analytics-table thead tr { background: #0d1117; }
+    .analytics-table th { padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; border-bottom: 1px solid #1e293b; white-space: nowrap; }
+    .analytics-table td { padding: 13px 16px; border-bottom: 1px solid #141414; color: #cbd5e1; vertical-align: middle; }
+    .analytics-table tbody tr:last-child td { border-bottom: none; }
+    .analytics-table tbody tr:hover td { background: #0d1117; }
+    .an-week { font-weight: 600; color: #94a3b8; white-space: nowrap; }
+    .an-delta-up { color: #22c55e; font-size: 11px; }
+    .an-delta-down { color: #ef4444; font-size: 11px; }
+    .an-delta-flat { color: #4b5563; font-size: 11px; }
+    .an-current-week { background: #0f172a !important; }
+    .an-current-week .an-week::after { content: ' ← actual'; font-size: 10px; color: #6366f1; font-weight: 400; }
+
     /* ── Format/Qty selectors ── */
     .format-selector, .qty-selector { margin-top: 12px; padding: 14px; background: #111; border: 1px solid #2a2a2a; border-radius: 10px; }
     .sel-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
@@ -747,6 +767,7 @@ app.get('/', async (req, res) => {
     <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
     <button class="nav-tab" data-section="ideas-kanban" onclick="showSection('ideas-kanban')">💡 Ideas</button>
+    <button class="nav-tab" data-section="analytics" onclick="showSection('analytics')">📊 Analytics</button>
     <button class="nav-tab" data-section="uso" onclick="showSection('uso')">Uso</button>
   </nav>
   <div class="header-cost" id="header-cost">💰 <strong>$${usage.today.toFixed(4)}</strong> hoy</div>
@@ -1274,6 +1295,19 @@ app.get('/', async (req, res) => {
   </div>
 </section>
 
+<!-- ── ANALYTICS SEMANAL ── -->
+<section id="section-analytics" class="section">
+  <div class="section-header" style="margin-bottom:8px;">
+    <h2 class="section-title">📊 Analytics Semanal</h2>
+    <button class="btn-registrar-semana" id="btn-registrar-semana" onclick="registrarSemana()">📸 Registrar semana</button>
+  </div>
+  <p style="font-size:13px;color:#6b7280;margin-bottom:22px;">Guarda un snapshot de tus métricas cada semana y visualiza la evolución con % de cambio.</p>
+  <div id="analytics-notice" class="analytics-notice" style="display:none;"></div>
+  <div id="analytics-content">
+    <div class="spinner" style="margin:40px auto;border-top-color:#6C63FF;"></div>
+  </div>
+</section>
+
 <!-- ── USO ── -->
 <section id="section-uso" class="section">
   <div class="section-header">
@@ -1331,6 +1365,7 @@ app.get('/', async (req, res) => {
     if (id === 'metas') loadMetas();
     if (id === 'calendario') loadCalendario();
     if (id === 'ideas-kanban') loadKanban();
+    if (id === 'analytics') loadAnalytics();
   }
 
   // ── Channel count ───────────────────────────────────────────────────────────
@@ -2867,6 +2902,130 @@ app.get('/', async (req, res) => {
       if (btn) { btn.disabled = false; btn.textContent = '🔖'; }
     }
   }
+
+  // ── Analytics semanal ────────────────────────────────────────────────────────
+  let _analyticsData = null;
+
+  async function loadAnalytics() {
+    const el = document.getElementById('analytics-content');
+    if (!el) return;
+    if (_analyticsData) { renderAnalytics(_analyticsData); return; }
+    el.innerHTML = \`<div class="spinner" style="margin:40px auto;border-top-color:#6C63FF;"></div>\`;
+    try {
+      const res = await fetch('/api/analytics');
+      const json = await res.json();
+      _analyticsData = json.data || [];
+      renderAnalytics(_analyticsData);
+    } catch (e) {
+      el.innerHTML = \`<p style="color:#ef4444;font-size:14px;">Error cargando analytics: \${e.message}</p>\`;
+    }
+  }
+
+  function renderAnalytics(snaps) {
+    const el = document.getElementById('analytics-content');
+    if (!el) return;
+
+    if (!snaps || snaps.length === 0) {
+      el.innerHTML = \`
+        <div class="analytics-empty">
+          <div style="font-size:40px;margin-bottom:12px;">📊</div>
+          <p>Aún no hay registros históricos.</p>
+          <p style="margin-top:6px;">Haz clic en <strong>"📸 Registrar semana"</strong> para guardar los stats actuales y empezar a trackear tu crecimiento.</p>
+        </div>\`;
+      return;
+    }
+
+    function fmtNum(n) {
+      if (n == null) return '—';
+      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toLocaleString('es-MX');
+    }
+
+    function deltaHtml(curr, prev) {
+      if (curr == null || prev == null || prev === 0) return '';
+      const diff = curr - prev;
+      const pct = (diff / prev * 100).toFixed(1);
+      if (diff > 0) return \` <span class="an-delta-up">↑+\${pct}%</span>\`;
+      if (diff < 0) return \` <span class="an-delta-down">↓\${pct}%</span>\`;
+      return \` <span class="an-delta-flat">→0%</span>\`;
+    }
+
+    function fmtWeek(weekOf) {
+      const d = new Date(weekOf + 'T12:00:00Z');
+      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    // Get current week's Monday to highlight current week row
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    const thisMonday = new Date(today); thisMonday.setDate(diff);
+    const thisMondayStr = thisMonday.toISOString().split('T')[0];
+
+    let rows = '';
+    for (let i = 0; i < snaps.length; i++) {
+      const s = snaps[i];
+      const prev = snaps[i + 1]; // older record
+      const isCurrent = s.weekOf === thisMondayStr;
+      rows += \`
+        <tr class="\${isCurrent ? 'an-current-week' : ''}">
+          <td class="an-week">\${fmtWeek(s.weekOf)}</td>
+          <td>\${fmtNum(s.yt_subs)}\${deltaHtml(s.yt_subs, prev?.yt_subs)}</td>
+          <td>\${fmtNum(s.yt_views)}\${deltaHtml(s.yt_views, prev?.yt_views)}</td>
+          <td>\${fmtNum(s.ig_followers)}\${deltaHtml(s.ig_followers, prev?.ig_followers)}</td>
+          <td>\${fmtNum(s.fb_followers)}\${deltaHtml(s.fb_followers, prev?.fb_followers)}</td>
+          <td>\${fmtNum(s.tiktok_followers)}\${deltaHtml(s.tiktok_followers, prev?.tiktok_followers)}</td>
+        </tr>\`;
+    }
+
+    el.innerHTML = \`
+      <div class="analytics-table-wrap">
+        <table class="analytics-table">
+          <thead>
+            <tr>
+              <th>Semana del</th>
+              <th>🎬 YT Subs</th>
+              <th>👁 YT Vistas</th>
+              <th>📸 Instagram</th>
+              <th>📘 Facebook</th>
+              <th>🎵 TikTok</th>
+            </tr>
+          </thead>
+          <tbody>\${rows}</tbody>
+        </table>
+      </div>
+      <p style="font-size:11px;color:#374151;margin-top:12px;text-align:right;">\${snaps.length} registro\${snaps.length !== 1 ? 's' : ''} guardado\${snaps.length !== 1 ? 's' : ''}</p>\`;
+  }
+
+  async function registrarSemana() {
+    const btn = document.getElementById('btn-registrar-semana');
+    const notice = document.getElementById('analytics-notice');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Registrando...'; }
+    if (notice) notice.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/analytics/snapshot', { method: 'POST' });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || 'Error desconocido');
+
+      _analyticsData = null; // Invalidate cache
+      await loadAnalytics();
+
+      if (notice) {
+        notice.style.cssText = 'display:block;color:#22c55e;background:#052e16;border-color:#15803d;';
+        notice.textContent = \`✅ Semana del \${json.data.weekOf} registrada correctamente\`;
+        setTimeout(() => { notice.style.display = 'none'; }, 4000);
+      }
+    } catch (err) {
+      if (notice) {
+        notice.style.cssText = 'display:block;color:#ef4444;background:#1c0a0a;border-color:#7f1d1d;';
+        notice.textContent = \`❌ Error: \${err.message}\`;
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '📸 Registrar semana'; }
+    }
+  }
 </script>
 <script src="/calendario.js"></script>
 </body>
@@ -4295,6 +4454,7 @@ app.get('/usage-data', async (req, res) => {
 const postsService = require('./postsService');
 const ideasService = require('./ideasService');
 const hookService = require('./hookService');
+const analyticsService = require('./analyticsService');
 
 // Posts API
 app.get('/api/posts', async (req, res) => {
@@ -4670,6 +4830,91 @@ app.delete('/api/hooks/:id', async (req, res) => {
     await hookService.deleteHook(req.params.id);
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false, error: err.message }); }
+});
+
+// ── Analytics API ──────────────────────────────────────────────────────────────
+
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const data = await analyticsService.getAllSnapshots();
+    res.json({ ok: true, data });
+  } catch (err) { res.json({ ok: false, error: err.message, data: [] }); }
+});
+
+app.post('/api/analytics/snapshot', async (req, res) => {
+  try {
+    const weekOf = analyticsService.getMonday();
+
+    // 1. YouTube stats
+    let yt_subs = null, yt_views = null;
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (apiKey) {
+      try {
+        const chRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+          params: { part: 'statistics', forHandle: 'marcia.nomada', key: apiKey },
+        });
+        const stats = chRes.data.items?.[0]?.statistics;
+        if (stats) {
+          yt_subs = parseInt(stats.subscriberCount || 0, 10);
+          yt_views = parseInt(stats.viewCount || 0, 10);
+        }
+      } catch (ytErr) {
+        console.error('Analytics snapshot — YT error:', ytErr.message);
+      }
+    }
+
+    // 2. Meta stats (Facebook + Instagram)
+    let fb_followers = null, ig_followers = null;
+    const metaToken = await loadMetaToken();
+    if (metaToken) {
+      try {
+        const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
+          params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' },
+        });
+        const pages = pagesRes.data.data || [];
+        const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
+        if (page) {
+          const pageToken = page.access_token || metaToken;
+          const pageRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
+            params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken },
+          });
+          const fc = pageRes.data.followers_count;
+          const fanc = pageRes.data.fan_count;
+          fb_followers = (fc != null && fc > 0) ? fc : (fanc != null ? fanc : null);
+          const igId = pageRes.data.instagram_business_account?.id;
+          if (igId) {
+            const igRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}`, {
+              params: { fields: 'followers_count', access_token: pageToken },
+            });
+            ig_followers = igRes.data.followers_count ?? null;
+          }
+        }
+      } catch (metaErr) {
+        console.error('Analytics snapshot — Meta error:', metaErr.response?.data?.error?.message || metaErr.message);
+      }
+    }
+
+    // 3. TikTok stats
+    let tiktok_followers = null;
+    const ttToken = await loadTikTokToken();
+    if (ttToken) {
+      try {
+        const ttRes = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
+          params: { fields: 'follower_count' },
+          headers: { Authorization: `Bearer ${ttToken}` },
+        });
+        tiktok_followers = ttRes.data.data?.user?.follower_count ?? null;
+      } catch (ttErr) {
+        console.error('Analytics snapshot — TikTok error:', ttErr.message);
+      }
+    }
+
+    // 4. Save snapshot
+    const snap = await analyticsService.saveSnapshot({ weekOf, yt_subs, yt_views, fb_followers, ig_followers, tiktok_followers });
+    res.json({ ok: true, data: snap });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 function startServer() {
