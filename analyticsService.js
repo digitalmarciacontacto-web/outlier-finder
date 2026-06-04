@@ -61,7 +61,7 @@ async function getAllSnapshots() {
   if (!redis) return [];
   let weeks = [];
   try {
-    weeks = await redis.zrangebyscore(INDEX_KEY, '-inf', '+inf');
+    weeks = await redis.zrange(INDEX_KEY, 0, -1);
   } catch (_) { return []; }
   if (weeks.length === 0) return [];
   const snaps = await Promise.all(weeks.map(w => getSnapshot(w)));

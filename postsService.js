@@ -94,13 +94,13 @@ async function getPostsByMonth(yearMonth) {
   // Get scheduled posts for this month
   let scheduledIds = [];
   try {
-    scheduledIds = await redis.zrangebyscore(INDEX_KEY, start, end);
+    scheduledIds = await redis.zrange(INDEX_KEY, start, end, { byScore: true });
   } catch (_) { scheduledIds = []; }
 
   // Also get drafts (score = 0)
   let draftIds = [];
   try {
-    draftIds = await redis.zrangebyscore(INDEX_KEY, 0, 0);
+    draftIds = await redis.zrange(INDEX_KEY, 0, 0, { byScore: true });
   } catch (_) { draftIds = []; }
 
   const allIds = [...new Set([...scheduledIds, ...draftIds])];
@@ -115,7 +115,7 @@ async function getAllPosts() {
   if (!redis) return [];
   let ids = [];
   try {
-    ids = await redis.zrangebyscore(INDEX_KEY, '-inf', '+inf');
+    ids = await redis.zrange(INDEX_KEY, 0, -1);
   } catch (_) { return []; }
   if (ids.length === 0) return [];
   const posts = await Promise.all(ids.map(id => getPost(id)));

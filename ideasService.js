@@ -78,7 +78,7 @@ async function getAllIdeas() {
   if (!redis) return [];
   let ids = [];
   try {
-    ids = await redis.zrangebyscore(INDEX_KEY, '-inf', '+inf');
+    ids = await redis.zrange(INDEX_KEY, 0, -1);
   } catch (_) { return []; }
   if (ids.length === 0) return [];
   const ideas = await Promise.all(ids.map(id => getIdea(id)));
