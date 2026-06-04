@@ -753,6 +753,41 @@ app.get('/', async (req, res) => {
       .week-grid { grid-template-columns: repeat(2, 1fr); }
     }
     .crear-section-title { font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+
+    /* ── Outlier platform tabs ── */
+    .outlier-plat-tabs { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
+    .outlier-plat-tab { background: #1a1a1a; border: 1px solid #2a2a2a; color: #6b7280; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+    .outlier-plat-tab:hover { border-color: #6366f1; color: #a5b4fc; }
+    .outlier-plat-tab.active { background: #1e1b4b; border-color: #6366f1; color: #a78bfa; }
+    .social-outlier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 20px; }
+    .social-outlier-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+    .social-outlier-card.viral { border-color: #7c3aed; }
+    .social-outlier-card.strong { border-color: #1d4ed8; }
+    .social-score-badge { position: absolute; top: 14px; right: 14px; background: #1e1b4b; color: #a78bfa; font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 20px; }
+    .social-score-badge.viral { background: #4c1d95; color: #c4b5fd; }
+    .social-score-badge.strong { background: #1e3a5f; color: #93c5fd; }
+    .social-post-text { font-size: 13px; color: #cbd5e1; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .social-post-meta { display: flex; gap: 16px; font-size: 12px; color: #4b5563; flex-wrap: wrap; }
+    .social-post-meta span { display: flex; align-items: center; gap: 4px; }
+    .social-post-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .btn-social-view { background: none; border: 1px solid #2a2a2a; color: #94a3b8; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; text-decoration: none; }
+    .btn-social-view:hover { border-color: #6366f1; color: #a5b4fc; }
+    .btn-social-hook { background: #1e1b4b; border: 1px solid #6366f1; color: #a78bfa; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .btn-social-hook:hover { background: #312e81; }
+    .social-platform-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+    .social-platform-title { font-size: 15px; font-weight: 700; color: #e2e8f0; }
+    .social-avg-badge { font-size: 12px; color: #6b7280; background: #111; border: 1px solid #2a2a2a; padding: 4px 10px; border-radius: 20px; }
+    .social-empty { background: #111; border: 1px dashed #2a2a2a; border-radius: 12px; padding: 48px 24px; text-align: center; color: #6b7280; font-size: 14px; }
+    .social-connect-prompt { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 14px; }
+    .social-connect-prompt strong { color: #a78bfa; }
+    .social-loading { display: flex; align-items: center; gap: 12px; padding: 40px 0; color: #6b7280; font-size: 13px; }
+    .tiktok-manual-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .tt-manual-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .tt-manual-input { width: 100%; background: #111; border: 1px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 13px; padding: 9px 12px; outline: none; font-family: inherit; box-sizing: border-box; }
+    .tt-manual-input:focus { border-color: #6366f1; }
+    .btn-tt-add { background: #1e1b4b; border: 1px solid #6366f1; color: #a78bfa; padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+    .btn-tt-refresh { background: #111; border: 1px solid #2a2a2a; color: #6b7280; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-tt-refresh:hover { border-color: #6366f1; color: #a5b4fc; }
   </style>
 </head>
 <body>
@@ -897,54 +932,86 @@ app.get('/', async (req, res) => {
 <section id="section-outliers" class="section">
   <div class="section-header">
     <h2 class="section-title">📊 Outlier Feed</h2>
-    <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
+    <button class="btn-manage-channels" id="btn-manage-yt-channels" onclick="openChannelModal()">⚙️ Gestionar canales YT</button>
   </div>
 
-  <!-- Métricas + outlier destacado (movidos desde Hoy) -->
-  <div class="hoy-date" style="margin-bottom:16px;">
-    Análisis del <span>${date || 'Sin datos aún'}</span> · ${videos.length} outliers encontrados
+  <!-- Platform tabs -->
+  <div class="outlier-plat-tabs">
+    <button class="outlier-plat-tab active" onclick="switchOutlierTab('youtube', this)">🎬 YouTube</button>
+    <button class="outlier-plat-tab" onclick="switchOutlierTab('facebook', this)">📘 Facebook</button>
+    <button class="outlier-plat-tab" onclick="switchOutlierTab('instagram', this)">📸 Instagram</button>
+    <button class="outlier-plat-tab" onclick="switchOutlierTab('tiktok', this)">🎵 TikTok</button>
   </div>
-  <div class="metrics-grid" style="margin-bottom:20px;">
-    <div class="metric-card">
-      <div class="metric-label">Mejor score</div>
-      <div class="metric-value ${topScore >= 500 ? 'viral' : topScore >= 200 ? 'strong' : ''}">${topScore}x</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Total outliers</div>
-      <div class="metric-value">${videos.length}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Canales monitoreados</div>
-      <div class="metric-value" id="metric-channels">—</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Generaciones hoy</div>
-      <div class="metric-value">${generationsToday}</div>
-    </div>
-  </div>
-  ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 de la semana</div>' : ''}
-  ${featuredCardHtml}
-  ${videos.length > 0 ? '<div style="margin-bottom:24px;"></div>' : ''}
 
-  <div class="filter-row">
-    <button class="filter-pill active" data-topic="all" onclick="setTopic('all',this)">Todos</button>
-    <button class="filter-pill" data-topic="destino" onclick="setTopic('destino',this)">🌍 Destino</button>
-    <button class="filter-pill" data-topic="finanzas" onclick="setTopic('finanzas',this)">💰 Finanzas</button>
-    <button class="filter-pill" data-topic="reinvención" onclick="setTopic('reinvención',this)">🔄 Reinvención</button>
-    <button class="filter-pill" data-topic="trabajo-remoto" onclick="setTopic('trabajo-remoto',this)">📱 Trabajo Remoto</button>
-    <button class="filter-pill" data-topic="lado-b" onclick="setTopic('lado-b',this)">😬 Lado B</button>
-    <button class="filter-pill" data-topic="logistica" onclick="setTopic('logistica',this)">✈️ Logística</button>
+  <!-- ── YouTube tab ── -->
+  <div id="outlier-tab-youtube">
+    <div class="hoy-date" style="margin-bottom:16px;">
+      Análisis del <span>${date || 'Sin datos aún'}</span> · ${videos.length} outliers encontrados
+    </div>
+    <div class="metrics-grid" style="margin-bottom:20px;">
+      <div class="metric-card">
+        <div class="metric-label">Mejor score</div>
+        <div class="metric-value ${topScore >= 500 ? 'viral' : topScore >= 200 ? 'strong' : ''}">${topScore}x</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Total outliers</div>
+        <div class="metric-value">${videos.length}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Canales monitoreados</div>
+        <div class="metric-value" id="metric-channels">—</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Generaciones hoy</div>
+        <div class="metric-value">${generationsToday}</div>
+      </div>
+    </div>
+    ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 de la semana</div>' : ''}
+    ${featuredCardHtml}
+    ${videos.length > 0 ? '<div style="margin-bottom:24px;"></div>' : ''}
+
+    <div class="filter-row">
+      <button class="filter-pill active" data-topic="all" onclick="setTopic('all',this)">Todos</button>
+      <button class="filter-pill" data-topic="destino" onclick="setTopic('destino',this)">🌍 Destino</button>
+      <button class="filter-pill" data-topic="finanzas" onclick="setTopic('finanzas',this)">💰 Finanzas</button>
+      <button class="filter-pill" data-topic="reinvención" onclick="setTopic('reinvención',this)">🔄 Reinvención</button>
+      <button class="filter-pill" data-topic="trabajo-remoto" onclick="setTopic('trabajo-remoto',this)">📱 Trabajo Remoto</button>
+      <button class="filter-pill" data-topic="lado-b" onclick="setTopic('lado-b',this)">😬 Lado B</button>
+      <button class="filter-pill" data-topic="logistica" onclick="setTopic('logistica',this)">✈️ Logística</button>
+    </div>
+    <div class="filter-date-row">
+      <span class="filter-date-label">Fecha:</span>
+      <button class="filter-date-pill active" data-days="0" onclick="setDate(0,this)">Todos</button>
+      <button class="filter-date-pill" data-days="7" onclick="setDate(7,this)">7 días</button>
+      <button class="filter-date-pill" data-days="30" onclick="setDate(30,this)">1 mes</button>
+      <button class="filter-date-pill" data-days="365" onclick="setDate(365,this)">1 año</button>
+    </div>
+    <div class="outliers-grid" id="outliers-grid">
+      ${outlierCards}
+    </div>
   </div>
-  <div class="filter-date-row">
-    <span class="filter-date-label">Fecha:</span>
-    <button class="filter-date-pill active" data-days="0" onclick="setDate(0,this)">Todos</button>
-    <button class="filter-date-pill" data-days="7" onclick="setDate(7,this)">7 días</button>
-    <button class="filter-date-pill" data-days="30" onclick="setDate(30,this)">1 mes</button>
-    <button class="filter-date-pill" data-days="365" onclick="setDate(365,this)">1 año</button>
+
+  <!-- ── Facebook tab ── -->
+  <div id="outlier-tab-facebook" style="display:none;">
+    <div id="fb-outliers-content">
+      <div class="social-loading"><div class="spinner" style="border-top-color:#1877f2;"></div><span>Cargando posts de Facebook...</span></div>
+    </div>
   </div>
-  <div class="outliers-grid" id="outliers-grid">
-    ${outlierCards}
+
+  <!-- ── Instagram tab ── -->
+  <div id="outlier-tab-instagram" style="display:none;">
+    <div id="ig-outliers-content">
+      <div class="social-loading"><div class="spinner" style="border-top-color:#e1306c;"></div><span>Cargando posts de Instagram...</span></div>
+    </div>
   </div>
+
+  <!-- ── TikTok tab ── -->
+  <div id="outlier-tab-tiktok" style="display:none;">
+    <div id="tt-outliers-content">
+      <div class="social-loading"><div class="spinner" style="border-top-color:#69c9d0;"></div><span>Cargando datos de TikTok...</span></div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ── HOOK VAULT ── -->
@@ -1390,6 +1457,130 @@ app.get('/', async (req, res) => {
     document.querySelectorAll('.filter-date-pill').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     applyFilters();
+  }
+
+  // ── Social Outliers ──────────────────────────────────────────────────────────
+  let _activeSocialTab = 'youtube';
+  let _fbOutliersLoaded = false;
+  let _igOutliersLoaded = false;
+  let _ttOutliersLoaded = false;
+
+  function switchOutlierTab(tab, btn) {
+    _activeSocialTab = tab;
+    // Toggle tab buttons
+    document.querySelectorAll('.outlier-plat-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    // Show/hide tab panels
+    ['youtube','facebook','instagram','tiktok'].forEach(t => {
+      const el = document.getElementById('outlier-tab-' + t);
+      if (el) el.style.display = t === tab ? '' : 'none';
+    });
+    // Show/hide manage channels button (only for YouTube)
+    const mgBtn = document.getElementById('btn-manage-yt-channels');
+    if (mgBtn) mgBtn.style.display = tab === 'youtube' ? '' : 'none';
+    // Load data for selected tab
+    if (tab === 'facebook' && !_fbOutliersLoaded) loadFbOutliers();
+    if (tab === 'instagram' && !_igOutliersLoaded) loadIgOutliers();
+    if (tab === 'tiktok' && !_ttOutliersLoaded) loadTtOutliers();
+  }
+
+  function fmtSocialDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function socialScoreClass(s) { return s >= 3 ? 'viral' : s >= 2 ? 'strong' : ''; }
+
+  function renderSocialCards(posts, container, platform) {
+    const el = document.getElementById(container);
+    if (!el) return;
+    if (!posts || posts.length === 0) {
+      el.innerHTML = \`<div class="social-empty">No se encontraron posts recientes en \${platform}.</div>\`;
+      return;
+    }
+    el.innerHTML = \`<div class="social-outlier-grid">\${posts.map(p => {
+      const cls = socialScoreClass(p.score);
+      const hook = p.text.replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'").replace(/\\n/g,' ').slice(0,120);
+      return \`
+        <div class="social-outlier-card \${cls}">
+          <div class="social-score-badge \${cls}">\${p.score}x</div>
+          \${p.thumbnail ? \`<img src="\${p.thumbnail}" style="width:100%;height:140px;object-fit:cover;border-radius:8px;" loading="lazy"/>\` : ''}
+          <div class="social-post-text">\${p.text || '(sin texto)'}</div>
+          <div class="social-post-meta">
+            \${p.likes != null ? \`<span>❤️ \${p.likes.toLocaleString('es-MX')}</span>\` : ''}
+            \${p.comments != null ? \`<span>💬 \${p.comments}</span>\` : ''}
+            \${p.shares != null ? \`<span>↗️ \${p.shares}</span>\` : ''}
+            \${p.date ? \`<span>\${fmtSocialDate(p.date)}</span>\` : ''}
+          </div>
+          <div class="social-post-actions">
+            \${p.url ? \`<a class="btn-social-view" href="\${p.url}" target="_blank">↗ Ver post</a>\` : ''}
+            \${p.text ? \`<button class="btn-social-hook" onclick="useHook('\${hook}')">🔖 Guardar hook</button>\` : ''}
+          </div>
+        </div>\`;
+    }).join('')}</div>\`;
+  }
+
+  async function loadFbOutliers() {
+    const el = document.getElementById('fb-outliers-content');
+    if (!el) return;
+    el.innerHTML = \`<div class="social-loading"><div class="spinner" style="border-top-color:#1877f2;"></div><span>Cargando posts de Facebook...</span></div>\`;
+    try {
+      const res = await fetch('/api/social-outliers/facebook');
+      const d = await res.json();
+      if (!d.ok && d.code === 'NO_TOKEN') {
+        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Meta</strong> desde la sección Hoy para ver tus outliers de Facebook.</p></div>\`;
+        return;
+      }
+      if (!d.ok) throw new Error(d.error || 'Error al cargar Facebook');
+      _fbOutliersLoaded = true;
+      el.innerHTML = \`<div class="social-platform-header">
+        <div class="social-platform-title">📘 \${d.page || 'Digital.Marcia'} — Mis posts outliers</div>
+        <span class="social-avg-badge">Engagement promedio: \${d.avgEngagement}</span>
+        <button class="btn-tt-refresh" onclick="_fbOutliersLoaded=false;loadFbOutliers()">↻ Refrescar</button>
+      </div>
+      <div id="fb-cards-inner"></div>\`;
+      renderSocialCards(d.posts, 'fb-cards-inner', 'Facebook');
+    } catch (e) {
+      el.innerHTML = \`<div class="social-empty">Error: \${e.message}</div>\`;
+    }
+  }
+
+  async function loadIgOutliers() {
+    const el = document.getElementById('ig-outliers-content');
+    if (!el) return;
+    el.innerHTML = \`<div class="social-loading"><div class="spinner" style="border-top-color:#e1306c;"></div><span>Cargando posts de Instagram...</span></div>\`;
+    try {
+      const res = await fetch('/api/social-outliers/instagram');
+      const d = await res.json();
+      if (!d.ok && (d.code === 'NO_TOKEN' || d.code === 'NO_IG')) {
+        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Instagram Business</strong> vinculado a tu página de Facebook para ver tus outliers de Instagram.</p></div>\`;
+        return;
+      }
+      if (!d.ok) throw new Error(d.error || 'Error al cargar Instagram');
+      _igOutliersLoaded = true;
+      el.innerHTML = \`<div class="social-platform-header">
+        <div class="social-platform-title">📸 \${d.account || '@digital.marcia'} — Mis posts outliers</div>
+        <span class="social-avg-badge">Engagement promedio: \${d.avgEngagement}</span>
+        <button class="btn-tt-refresh" onclick="_igOutliersLoaded=false;loadIgOutliers()">↻ Refrescar</button>
+      </div>
+      <div id="ig-cards-inner"></div>\`;
+      renderSocialCards(d.posts, 'ig-cards-inner', 'Instagram');
+    } catch (e) {
+      el.innerHTML = \`<div class="social-empty">Error: \${e.message}</div>\`;
+    }
+  }
+
+  async function loadTtOutliers() {
+    const el = document.getElementById('tt-outliers-content');
+    if (!el) return;
+    _ttOutliersLoaded = true;
+    el.innerHTML = \`
+      <div class="social-connect-prompt">
+        <p style="font-size:32px;margin-bottom:12px;">🎵</p>
+        <p>La API de TikTok no permite leer listas de videos de otras cuentas sin aprobación especial.</p>
+        <p style="margin-top:8px;color:#6b7280;">Próximamente: entrada manual de videos virales de TikTok para trackear tendencias.</p>
+      </div>\`;
   }
 
   // ── Card expansion + lazy pattern analysis ──────────────────────────────────
@@ -4982,6 +5173,79 @@ app.post('/api/analytics/snapshot', async (req, res) => {
     res.json({ ok: true, data: snap });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Social Outliers API ────────────────────────────────────────────────────────
+
+app.get('/api/social-outliers/facebook', async (req, res) => {
+  const metaToken = await loadMetaToken();
+  if (!metaToken) return res.json({ ok: false, code: 'NO_TOKEN', posts: [] });
+  try {
+    const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
+      params: { access_token: metaToken, fields: 'id,name,access_token,fan_count,followers_count' },
+    });
+    const pages = pagesRes.data.data || [];
+    const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
+    if (!page) return res.json({ ok: false, code: 'NO_PAGE', posts: [] });
+    const pageToken = page.access_token || metaToken;
+
+    const postsRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/posts`, {
+      params: {
+        fields: 'id,message,story,created_time,permalink_url,likes.summary(true),comments.summary(true),shares',
+        limit: 30,
+        access_token: pageToken,
+      },
+    });
+    const rawPosts = postsRes.data.data || [];
+    const posts = rawPosts.map(p => {
+      const likes = p.likes?.summary?.total_count || 0;
+      const comments = p.comments?.summary?.total_count || 0;
+      const shares = p.shares?.count || 0;
+      const engagement = likes + comments * 2 + shares * 3;
+      return { id: p.id, text: (p.message || p.story || '').slice(0, 280), url: p.permalink_url || '', date: p.created_time, likes, comments, shares, engagement };
+    });
+    if (posts.length === 0) return res.json({ ok: true, posts: [], page: page.name, avgEngagement: 0 });
+    const avg = posts.reduce((s, p) => s + p.engagement, 0) / posts.length;
+    const scored = posts.map(p => ({ ...p, score: avg > 0 ? parseFloat((p.engagement / avg).toFixed(1)) : 0 })).sort((a, b) => b.score - a.score);
+    res.json({ ok: true, posts: scored, page: page.name, avgEngagement: Math.round(avg) });
+  } catch (err) {
+    res.json({ ok: false, error: err.response?.data?.error?.message || err.message, posts: [] });
+  }
+});
+
+app.get('/api/social-outliers/instagram', async (req, res) => {
+  const metaToken = await loadMetaToken();
+  if (!metaToken) return res.json({ ok: false, code: 'NO_TOKEN', posts: [] });
+  try {
+    const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
+      params: { access_token: metaToken, fields: 'id,name,access_token' },
+    });
+    const pages = pagesRes.data.data || [];
+    const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
+    if (!page) return res.json({ ok: false, code: 'NO_PAGE', posts: [] });
+    const pageToken = page.access_token || metaToken;
+    const pageDetail = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
+      params: { fields: 'instagram_business_account', access_token: pageToken },
+    });
+    const igId = pageDetail.data.instagram_business_account?.id;
+    if (!igId) return res.json({ ok: false, code: 'NO_IG', posts: [] });
+    const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}/media`, {
+      params: { fields: 'id,caption,media_type,timestamp,permalink,like_count,comments_count,thumbnail_url,media_url', limit: 30, access_token: pageToken },
+    });
+    const rawMedia = mediaRes.data.data || [];
+    const posts = rawMedia.map(m => ({
+      id: m.id, text: (m.caption || '').slice(0, 280), url: m.permalink || '', date: m.timestamp,
+      type: m.media_type, thumbnail: m.thumbnail_url || m.media_url || '',
+      likes: m.like_count || 0, comments: m.comments_count || 0,
+      engagement: (m.like_count || 0) + (m.comments_count || 0) * 2,
+    }));
+    if (posts.length === 0) return res.json({ ok: true, posts: [], account: '@digital.marcia', avgEngagement: 0 });
+    const avg = posts.reduce((s, p) => s + p.engagement, 0) / posts.length;
+    const scored = posts.map(p => ({ ...p, score: avg > 0 ? parseFloat((p.engagement / avg).toFixed(1)) : 0 })).sort((a, b) => b.score - a.score);
+    res.json({ ok: true, posts: scored, account: '@digital.marcia', avgEngagement: Math.round(avg) });
+  } catch (err) {
+    res.json({ ok: false, error: err.response?.data?.error?.message || err.message, posts: [] });
   }
 });
 
