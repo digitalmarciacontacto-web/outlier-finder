@@ -219,6 +219,23 @@ app.get('/', async (req, res) => {
     .empty-state { text-align: center; padding: 60px 20px; color: #4b5563; font-size: 14px; }
 
     /* ── Qué publicar hoy ── */
+    /* ── Hoy canal summary ── */
+    .hoy-canal-summary { background: #141420; border: 1px solid #2a2a3a; border-radius: 16px; padding: 20px 24px; margin-bottom: 28px; }
+    .hoy-canal-loading { display: flex; align-items: center; gap: 10px; color: #6b7280; font-size: 13px; }
+    .hoy-canal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+    .hoy-canal-stat { display: flex; flex-direction: column; gap: 3px; }
+    .hoy-canal-stat-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .hoy-canal-stat-val { font-size: 24px; font-weight: 800; color: #e2e8f0; line-height: 1.1; }
+    .hoy-canal-stat-val.green { color: #34d399; }
+    .hoy-canal-stat-val.purple { color: #a78bfa; }
+    .hoy-canal-stat-val.blue { color: #60a5fa; }
+    .hoy-canal-stat-val.pink { color: #f472b6; }
+    .hoy-canal-platform-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .hoy-canal-platform-chip { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; color: #fff; }
+    .hoy-canal-divider { height: 1px; background: #2a2a3a; margin: 14px 0; }
+    .hoy-canal-link { font-size: 12px; color: #6C63FF; cursor: pointer; text-decoration: none; font-weight: 600; }
+    .hoy-canal-link:hover { color: #a78bfa; }
+
     .hoy-pub-section { margin-top: 32px; }
     .hoy-pub-title { font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
     .hoy-pub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
@@ -691,10 +708,34 @@ app.get('/', async (req, res) => {
 
 <!-- ── HOY ── -->
 <section id="section-hoy" class="section active">
-  <div class="hoy-date">
+
+  <!-- ── Resumen de mi canal ── -->
+  <div class="hoy-canal-summary" id="hoy-canal-summary">
+    <div class="hoy-canal-loading"><div class="spinner" style="border-top-color:#6C63FF;"></div><span>Cargando canal...</span></div>
+  </div>
+
+  <!-- ── Qué publicar hoy ── -->
+  <div class="hoy-pub-section">
+    <h3 class="hoy-pub-title">📅 Qué publicar hoy</h3>
+    <div class="hoy-pub-grid" id="hoy-pub-grid">
+      <div class="spinner" style="margin:auto;border-top-color:#6C63FF;"></div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── OUTLIERS ── -->
+<section id="section-outliers" class="section">
+  <div class="section-header">
+    <h2 class="section-title">📊 Outlier Feed</h2>
+    <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
+  </div>
+
+  <!-- Métricas + outlier destacado (movidos desde Hoy) -->
+  <div class="hoy-date" style="margin-bottom:16px;">
     Análisis del <span>${date || 'Sin datos aún'}</span> · ${videos.length} outliers encontrados
   </div>
-  <div class="metrics-grid">
+  <div class="metrics-grid" style="margin-bottom:20px;">
     <div class="metric-card">
       <div class="metric-label">Mejor score</div>
       <div class="metric-value ${topScore >= 500 ? 'viral' : topScore >= 200 ? 'strong' : ''}">${topScore}x</div>
@@ -712,52 +753,10 @@ app.get('/', async (req, res) => {
       <div class="metric-value">${generationsToday}</div>
     </div>
   </div>
-  ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 del día</div>' : ''}
+  ${videos.length > 0 ? '<div class="featured-label">⭐ Outlier #1 de la semana</div>' : ''}
   ${featuredCardHtml}
-  ${videos.length > 0 ? '<button class="btn-see-all" onclick="showSection(\'outliers\')">Ver todos los outliers →</button>' : ''}
+  ${videos.length > 0 ? '<div style="margin-bottom:24px;"></div>' : ''}
 
-  <!-- ── Qué publicar hoy ── -->
-  <div class="hoy-pub-section">
-    <h3 class="hoy-pub-title">📅 Qué publicar hoy</h3>
-    <div class="hoy-pub-grid" id="hoy-pub-grid">
-      <div class="spinner" style="margin:auto;border-top-color:#6C63FF;"></div>
-    </div>
-  </div>
-
-  <!-- ── Gini — procesador de ideas ── -->
-  <div class="gini-section">
-    <div class="gini-header">
-      <span style="font-size:24px;">💡</span>
-      <h3 class="gini-title">¿Qué tienes en mente hoy?</h3>
-    </div>
-    <div class="gini-subtitle">Escribe una idea, un pensamiento, algo que viviste... Gini lo convierte en contenido para tu ecosistema.</div>
-
-    <div class="gini-input-wrap">
-      <textarea id="gini-input" class="gini-textarea"
-        placeholder="Escribe una idea, un pensamiento, algo que viviste... Gini lo convierte en contenido para tu ecosistema."></textarea>
-    </div>
-
-    <div class="gini-actions">
-      <button class="btn-gini-process" id="btn-gini-process" onclick="processWithGini()">✨ Procesar con Gini</button>
-      <button class="btn-gini-new" id="btn-gini-new" onclick="giniReset()">+ Nueva idea</button>
-    </div>
-
-    <div class="gini-loading" id="gini-loading">
-      <div class="spinner" style="border-top-color:#a78bfa;width:18px;height:18px;border-width:2px;"></div>
-      <span>Gini está procesando tu idea...</span>
-    </div>
-
-    <!-- Result area — persistent until user resets -->
-    <div class="gini-result" id="gini-result"></div>
-  </div>
-</section>
-
-<!-- ── OUTLIERS ── -->
-<section id="section-outliers" class="section">
-  <div class="section-header">
-    <h2 class="section-title">📊 Outlier Feed</h2>
-    <button class="btn-manage-channels" onclick="openChannelModal()">⚙️ Gestionar canales</button>
-  </div>
   <div class="filter-row">
     <button class="filter-pill active" data-topic="all" onclick="setTopic('all',this)">Todos</button>
     <button class="filter-pill" data-topic="destino" onclick="setTopic('destino',this)">🌍 Destino</button>
@@ -1217,6 +1216,7 @@ app.get('/', async (req, res) => {
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
     if (id === 'canal') loadCanal();
+    if (id === 'hoy') loadHoyCanal();
     if (id === 'metas') loadMetas();
     if (id === 'calendario') loadCalendario();
     if (id === 'ideas-kanban') loadKanban();
@@ -1955,6 +1955,62 @@ app.get('/', async (req, res) => {
 
   let _publishedToday = [];
   const _todayStr = new Date().toISOString().split('T')[0];
+
+  // ── Hoy: canal summary ───────────────────────────────────────────────────
+  let _hoyCanalLoaded = false;
+
+  function fmtK(n) {
+    if (n == null) return '—';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  async function loadHoyCanal() {
+    if (_hoyCanalLoaded) return;
+    const box = document.getElementById('hoy-canal-summary');
+    if (!box) return;
+    try {
+      const r = await fetch('/my-channel');
+      const d = await r.json();
+      _hoyCanalLoaded = true;
+
+      const yt = d.youtube || {};
+      const ig = d.instagram || {};
+      const fb = d.facebook || {};
+      const tt = d.tiktok || {};
+
+      const stats = [
+        { label: 'YouTube subs', val: fmtK(yt.subscribers), color: 'green', icon: '▶' },
+        { label: 'YT vistas totales', val: fmtK(yt.totalViews), color: '', icon: '' },
+        { label: 'Instagram', val: fmtK(ig.followers ?? d.instagramFollowers), color: 'pink', icon: '📷' },
+        { label: 'Facebook', val: fmtK(fb.followers ?? d.facebookFollowers), color: 'blue', icon: 'f' },
+        { label: 'TikTok', val: fmtK(tt.followers ?? d.tiktokFollowers), color: 'purple', icon: '♪' },
+      ].filter(s => s.val !== '—');
+
+      box.innerHTML = stats.length === 0
+        ? \`<div style="color:#6b7280;font-size:13px;">Conecta tus redes en <a class="hoy-canal-link" onclick="showSection('canal')">Mi Canal</a> para ver el resumen aquí.</div>\`
+        : \`
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:13px;font-weight:700;color:#9898b0;letter-spacing:.04em;">📡 MI CANAL — RESUMEN</div>
+            <a class="hoy-canal-link" onclick="showSection('canal')">Ver detalle →</a>
+          </div>
+          <div class="hoy-canal-grid">
+            \${stats.map(s => \`
+              <div class="hoy-canal-stat">
+                <div class="hoy-canal-stat-label">\${s.icon ? s.icon + ' ' : ''}\${s.label}</div>
+                <div class="hoy-canal-stat-val \${s.color}">\${s.val}</div>
+              </div>
+            \`).join('')}
+          </div>
+        \`;
+    } catch (_) {
+      if (box) box.innerHTML = '<div style="color:#6b7280;font-size:13px;">No se pudo cargar el canal.</div>';
+    }
+  }
+
+  // Auto-load on first render (section-hoy is active by default)
+  loadHoyCanal();
 
   async function loadHoyPublicado() {
     try {
