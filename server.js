@@ -765,7 +765,6 @@ app.get('/', async (req, res) => {
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
     <button class="nav-tab" data-section="hooks" onclick="showSection('hooks')">🔖 Hooks</button>
-    <button class="nav-tab" data-section="canal" onclick="showSection('canal')">Mi Canal</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
@@ -790,7 +789,7 @@ app.get('/', async (req, res) => {
     <div class="canal-platforms-grid">
 
       <!-- YouTube -->
-      <div class="platform-card">
+      <div class="platform-card yt-card-clickable" onclick="toggleYtExpanded()" title="Click para ver videos">
         <div class="platform-card-header">
           <div class="platform-icon yt-icon">▶</div>
           <div><div class="platform-name">YouTube</div><div class="platform-handle">@marcia.nomada</div></div>
@@ -801,6 +800,7 @@ app.get('/', async (req, res) => {
           <div class="yt-qstat"><span class="yt-qstat-val" id="hoy-yt-views">—</span><span class="yt-qstat-label">VISTAS TOTALES</span></div>
           <div class="yt-qstat"><span class="yt-qstat-val" id="hoy-yt-videos">—</span><span class="yt-qstat-label">VIDEOS</span></div>
         </div>
+        <div id="yt-expand-hint" style="display:none;font-size:11px;color:#6366f1;margin-top:8px;font-weight:600;">Ver videos ▼</div>
       </div>
 
       <!-- Instagram -->
@@ -812,7 +812,7 @@ app.get('/', async (req, res) => {
         </div>
         <div class="platform-followers" id="hoy-ig-followers">—</div>
         <div class="platform-status-msg" id="hoy-ig-status">seguidores · Pendiente de conectar</div>
-        <button class="btn-connect" id="hoy-ig-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+        <button class="btn-connect" id="hoy-ig-btn" onclick="connectMeta()">Conectar Meta</button>
       </div>
 
       <!-- Facebook -->
@@ -824,7 +824,7 @@ app.get('/', async (req, res) => {
         </div>
         <div class="platform-followers" id="hoy-fb-followers">—</div>
         <div class="platform-status-msg" id="hoy-fb-status">seguidores · Pendiente de conectar</div>
-        <button class="btn-connect" id="hoy-fb-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+        <button class="btn-connect" id="hoy-fb-btn" onclick="connectMeta()">Conectar Meta</button>
       </div>
 
       <!-- TikTok -->
@@ -836,7 +836,7 @@ app.get('/', async (req, res) => {
         </div>
         <div class="platform-followers" id="hoy-tt-followers">—</div>
         <div class="platform-status-msg" id="hoy-tt-status">seguidores · Pendiente de conectar</div>
-        <button class="btn-connect active" id="hoy-tt-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+        <button class="btn-connect active" id="hoy-tt-btn" onclick="window.location.href='/tiktok-auth'">Conectar</button>
       </div>
 
     </div>
@@ -863,6 +863,25 @@ app.get('/', async (req, res) => {
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- YouTube expanded: top video + recent videos + avg -->
+  <div id="yt-expanded-section" style="display:none;">
+
+    <div class="yt-section-label">🏅 Video más visto</div>
+    <div id="yt-top-card"></div>
+
+    <div style="margin-top:24px;"></div>
+    <div class="yt-section-label">🕐 Últimos 5 videos</div>
+    <div class="yt-video-list" id="yt-video-list"></div>
+
+    <div id="yt-avg-row" class="yt-avg-row" style="display:none;">
+      <div>
+        <div class="yt-avg-val" id="yt-avg-val">—</div>
+        <div class="yt-avg-label">Promedio de vistas por video</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ── Qué publicar hoy ── -->
@@ -989,125 +1008,6 @@ app.get('/', async (req, res) => {
       </div>
     </div>
   </div>
-</section>
-
-<!-- ── MI CANAL ── -->
-<section id="section-canal" class="section">
-  <div class="section-header">
-    <h2 class="section-title">📡 Mi Canal</h2>
-  </div>
-
-  <!-- Platform cards 2x2 -->
-  <div class="canal-platforms-grid">
-
-    <!-- YouTube (real data) -->
-    <div class="platform-card yt-card-clickable" id="yt-platform-card" onclick="toggleYtExpanded()" title="Click para ver videos">
-      <div class="platform-card-header">
-        <div class="platform-icon yt-icon">▶</div>
-        <div>
-          <div class="platform-name">YouTube</div>
-          <div class="platform-handle">@marcia.nomada</div>
-        </div>
-        <div class="platform-live-badge">Live</div>
-      </div>
-      <div class="yt-loading" id="yt-loading"><div class="spinner"></div><span>Cargando...</span></div>
-      <div id="yt-quick-stats" class="yt-quick-stats" style="display:none;">
-        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-subs">—</span><span class="yt-qstat-label">Suscriptores</span></div>
-        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-views-total">—</span><span class="yt-qstat-label">Vistas totales</span></div>
-        <div class="yt-qstat"><span class="yt-qstat-val" id="yt-videos-count">—</span><span class="yt-qstat-label">Videos</span></div>
-      </div>
-      <div id="yt-expand-hint" style="display:none;font-size:11px;color:#6366f1;margin-top:8px;font-weight:600;">Ver videos ▼</div>
-    </div>
-
-    <!-- Instagram -->
-    <div class="platform-card" id="ig-card">
-      <div class="platform-card-header">
-        <div class="platform-icon ig-icon">📷</div>
-        <div>
-          <div class="platform-name">Instagram</div>
-          <div class="platform-handle">@digital.marcia</div>
-        </div>
-        <div class="platform-live-badge" id="ig-live-badge" style="display:none;">Live</div>
-      </div>
-      <div id="ig-followers" class="platform-followers">1,730</div>
-      <div id="ig-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
-      <button class="btn-connect" id="ig-connect-btn" onclick="connectMeta()">Conectar con Meta</button>
-    </div>
-
-    <!-- Facebook -->
-    <div class="platform-card" id="fb-card">
-      <div class="platform-card-header">
-        <div class="platform-icon fb-icon">f</div>
-        <div>
-          <div class="platform-name">Facebook</div>
-          <div class="platform-handle">Digital.Marcia</div>
-        </div>
-        <div class="platform-live-badge" id="fb-live-badge" style="display:none;">Live</div>
-      </div>
-      <div id="fb-followers" class="platform-followers">1,500</div>
-      <div id="fb-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
-      <button class="btn-connect" id="fb-connect-btn" onclick="connectMeta()">Conectar con Meta</button>
-    </div>
-
-    <!-- TikTok -->
-    <div class="platform-card">
-      <div class="platform-card-header">
-        <div class="platform-icon tt-icon">♪</div>
-        <div>
-          <div class="platform-name">TikTok</div>
-          <div class="platform-handle">@marcia.nomada</div>
-        </div>
-        <div class="platform-live-badge" id="tt-live-badge" style="display:none;">Live</div>
-      </div>
-      <div id="tt-followers" class="platform-followers">241</div>
-      <div id="tt-status" class="platform-status-msg">seguidores · Pendiente de conectar</div>
-      <button class="btn-connect active" id="tt-connect-btn" onclick="window.location.href='/tiktok-auth'">Conectar</button>
-    </div>
-
-  </div>
-
-  <!-- YPP Progress (shown after data loads) -->
-  <div class="ypp-section" id="ypp-section" style="display:none;">
-    <div class="ypp-title">🏆 Progreso hacia YouTube Partner Program</div>
-    <div class="ypp-grid">
-      <div>
-        <div class="ypp-item-label">Suscriptores</div>
-        <div class="ypp-item-vals"><span id="ypp-subs-val">—</span> / 1,000</div>
-        <div class="progress-bar-wrap">
-          <div class="progress-bar-fill" id="ypp-subs-bar" style="width:0%;background:#22c55e;"></div>
-        </div>
-        <div class="ypp-pct" id="ypp-subs-pct" style="color:#22c55e;"></div>
-      </div>
-      <div>
-        <div class="ypp-item-label">Watch Time (4,000 hrs)</div>
-        <div class="ypp-item-vals">Pendiente de calcular</div>
-        <div class="progress-bar-wrap">
-          <div class="progress-bar-fill" style="width:0%;background:#6b7280;"></div>
-        </div>
-        <div class="ypp-note">⚠️ Los Shorts no cuentan para las 4,000 horas</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- YouTube expanded: top video + recent videos + avg -->
-  <div id="yt-expanded-section" style="display:none;">
-
-    <div class="yt-section-label">🏅 Video más visto</div>
-    <div id="yt-top-card"></div>
-
-    <div style="margin-top:24px;"></div>
-    <div class="yt-section-label">🕐 Últimos 5 videos</div>
-    <div class="yt-video-list" id="yt-video-list"></div>
-
-    <div id="yt-avg-row" class="yt-avg-row" style="display:none;">
-      <div>
-        <div class="yt-avg-val" id="yt-avg-val">—</div>
-        <div class="yt-avg-label">Promedio de vistas por video</div>
-      </div>
-    </div>
-
-  </div>
-
 </section>
 
 <!-- ── METAS ── -->
@@ -1442,7 +1342,6 @@ app.get('/', async (req, res) => {
     document.getElementById('section-' + id).classList.add('active');
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
-    if (id === 'canal') loadCanal();
     if (id === 'hoy') loadHoyCanal();
     if (id === 'hooks') loadHookVault();
     if (id === 'metas') loadMetas();
@@ -2245,7 +2144,8 @@ app.get('/', async (req, res) => {
       } else {
         _set('hoy-ig-followers', d.instagramFollowers != null ? fmtK(d.instagramFollowers) : '—');
         _set('hoy-ig-status', 'seguidores · Pendiente de conectar');
-        _btn('hoy-ig-btn', '✓ Conectado', 'connected');
+        const igBtn = document.getElementById('hoy-ig-btn');
+        if (igBtn) { igBtn.textContent = 'Conectar Meta'; igBtn.className = 'btn-connect active'; igBtn.onclick = connectMeta; }
       }
 
       // ── Facebook ──
@@ -2257,7 +2157,8 @@ app.get('/', async (req, res) => {
       } else {
         _set('hoy-fb-followers', d.facebookFollowers != null ? fmtK(d.facebookFollowers) : '—');
         _set('hoy-fb-status', 'seguidores · Pendiente de conectar');
-        _btn('hoy-fb-btn', '✓ Conectado', 'connected');
+        const fbBtn = document.getElementById('hoy-fb-btn');
+        if (fbBtn) { fbBtn.textContent = 'Conectar Meta'; fbBtn.className = 'btn-connect active'; fbBtn.onclick = connectMeta; }
       }
 
       // ── TikTok ──
@@ -2272,6 +2173,46 @@ app.get('/', async (req, res) => {
         _btn('hoy-tt-btn', 'Conectar', 'active');
         document.getElementById('hoy-tt-btn').onclick = () => window.location.href = '/tiktok-auth';
       }
+
+      // ── YouTube video sections ──
+      if (d.topVideo) {
+        const tv = d.topVideo;
+        const tcEl = document.getElementById('yt-top-card');
+        if (tcEl) tcEl.innerHTML = \`
+          <div class="yt-top-card">
+            \${tv.thumbnail ? \`<img class="yt-top-thumb" src="\${tv.thumbnail}" alt=""/>\` : \`<div class="yt-top-thumb"></div>\`}
+            <div class="yt-top-body">
+              <div class="yt-top-badge">🏅 Más visto del canal</div>
+              <div class="yt-top-title">\${tv.title}</div>
+              <div class="yt-top-meta">👁 \${fmtK(tv.views)} vistas · 👍 \${fmtK(tv.likes)} likes</div>
+              <a class="btn-yt" href="\${tv.url}" target="_blank" style="margin-top:8px;width:fit-content;">▶ Ver video</a>
+            </div>
+          </div>\`;
+      }
+      if (d.recentVideos && d.recentVideos.length > 0) {
+        const listEl = document.getElementById('yt-video-list');
+        if (listEl) listEl.innerHTML = d.recentVideos.map((v, i) => \`
+          <div class="yt-video-item">
+            <div class="yt-video-rank">\${i + 1}</div>
+            \${v.thumbnail ? \`<img class="yt-video-thumb" src="\${v.thumbnail}" alt=""/>\` : \`<div class="yt-video-thumb-placeholder">▶</div>\`}
+            <div class="yt-video-body">
+              <div class="yt-video-title">\${v.title}</div>
+              <div class="yt-video-meta">
+                <span>👁 \${fmtK(v.views)}</span>
+                <span>👍 \${fmtK(v.likes)}</span>
+              </div>
+            </div>
+            <a class="btn-yt" href="\${v.url}" target="_blank" style="flex-shrink:0;">▶</a>
+          </div>\`).join('');
+      }
+      if (d.avgViews) {
+        const avgEl = document.getElementById('yt-avg-val');
+        const avgRow = document.getElementById('yt-avg-row');
+        if (avgEl) avgEl.textContent = fmtK(d.avgViews);
+        if (avgRow) avgRow.style.display = 'flex';
+      }
+      // Reveal expand hint
+      _show('yt-expand-hint');
 
       _hide('hoy-canal-loading');
       _show('hoy-canal-cards');
@@ -2789,7 +2730,7 @@ app.get('/', async (req, res) => {
     \`,
     CHECK_TOKEN: \`
       <strong>Error de API</strong><br>
-      Prueba reconectando el token en "Mi Canal → Conectar con Meta".
+      Prueba reconectando el token en la sección Hoy → Conectar Meta.
     \`,
   };
 
@@ -4712,7 +4653,7 @@ app.post('/api/ideas/:id/convert', async (req, res) => {
 app.get('/facebook-income', async (req, res) => {
   const metaToken = await loadMetaToken();
   if (!metaToken) {
-    return res.json({ ok: false, code: 'NO_TOKEN', message: 'No hay token de Meta guardado. Ve a "Mi Canal" y conecta con Meta primero.' });
+    return res.json({ ok: false, code: 'NO_TOKEN', message: 'No hay token de Meta guardado. Conecta Meta desde la sección Hoy.' });
   }
 
   const BASE = 'https://graph.facebook.com/v19.0';
@@ -4731,7 +4672,7 @@ app.get('/facebook-income', async (req, res) => {
     const code = e.response?.data?.error?.code;
     const msg  = e.response?.data?.error?.message || e.message;
     if (code === 190 || /expired|invalid/i.test(msg)) {
-      return res.json({ ok: false, code: 'TOKEN_EXPIRED', message: 'El token de Meta expiró. Ve a "Mi Canal" y reconecta con Meta.', meta: msg });
+      return res.json({ ok: false, code: 'TOKEN_EXPIRED', message: 'El token de Meta expiró. Reconecta Meta desde la sección Hoy.', meta: msg });
     }
     return res.json({ ok: false, code: 'PAGES_ERROR', message: `Error al obtener páginas: ${msg}` });
   }
