@@ -110,6 +110,7 @@ app.get('/', async (req, res) => {
           <div class="o-actions" onclick="event.stopPropagation()">
             <a class="btn-yt" href="${v.url}" target="_blank">▶ Ver</a>
             <button class="btn-gen" id="gen-btn-${i}" onclick="startGenerate(${i},event)">✨ Generar guion</button>
+            <button class="btn-save-hook" id="hook-btn-${i}" onclick="saveOutlierHook(${i},event)" title="Guardar hook en vault">🔖</button>
           </div>
         </div>
         <div class="o-expand" id="expand-${i}">
@@ -332,6 +333,52 @@ app.get('/', async (req, res) => {
     .btn-gen { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity .2s; display: inline-flex; align-items: center; gap: 4px; }
     .btn-gen:hover { opacity: .85; }
     .btn-gen:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-save-hook { background: #1a1a2a; border: 1px solid #2a2a3a; color: #9898b0; padding: 7px 10px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all .15s; }
+    .btn-save-hook:hover { background: #1e1b4b; border-color: #4f46e5; color: #a78bfa; }
+    .btn-save-hook.saved { background: #052e16; border-color: #10b981; color: #34d399; cursor: default; }
+
+    /* ── Hook Vault section ── */
+    .hv-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .hv-search { flex: 1; min-width: 180px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 13px; padding: 9px 14px; outline: none; font-family: inherit; }
+    .hv-search:focus { border-color: #6366f1; }
+    .hv-filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .hv-filter { background: #1a1a1a; border: 1px solid #2a2a2a; color: #6b7280; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .hv-filter:hover { border-color: #4f46e5; color: #a78bfa; }
+    .hv-filter.active { background: #1e1b4b; border-color: #6366f1; color: #a78bfa; }
+    .hv-stats { font-size: 12px; color: #6b7280; padding: 4px 0; }
+    .hv-table { width: 100%; border-collapse: collapse; }
+    .hv-table th { text-align: left; font-size: 11px; color: #4b5563; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px; border-bottom: 1px solid #2a2a2a; }
+    .hv-table td { padding: 12px; border-bottom: 1px solid #1a1a1a; vertical-align: middle; }
+    .hv-table tbody tr:hover td { background: #141420; }
+    .hv-hook-text { font-size: 13px; color: #e2e8f0; line-height: 1.5; }
+    .hv-hook-source { font-size: 11px; color: #6b7280; margin-top: 3px; }
+    .hv-type-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 10px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    .hv-type-historia    { background: #1e3a5f; color: #60a5fa; }
+    .hv-type-tensión     { background: #3b1a00; color: #f97316; }
+    .hv-type-lista       { background: #14291a; color: #34d399; }
+    .hv-type-pregunta    { background: #2e1b4b; color: #c084fc; }
+    .hv-type-cambio      { background: #1a2e1b; color: #4ade80; }
+    .hv-type-controversia{ background: #3b0f0f; color: #f87171; }
+    .hv-type-dato        { background: #1a1a3b; color: #818cf8; }
+    .hv-type-motivación  { background: #2a1a00; color: #fbbf24; }
+    .hv-actions-cell { display: flex; gap: 6px; align-items: center; }
+    .btn-hv-usar { background: #1e1b4b; border: 1px solid #4f46e5; color: #a78bfa; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn-hv-usar:hover { background: #312e81; }
+    .btn-hv-del { background: transparent; border: 1px solid #2a2a2a; color: #6b7280; padding: 5px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .btn-hv-del:hover { border-color: #ef4444; color: #f87171; }
+    .hv-empty { text-align: center; padding: 60px 20px; color: #4b5563; font-size: 14px; }
+    /* Add hook modal */
+    .hv-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 950; display: flex; align-items: center; justify-content: center; }
+    .hv-modal { background: #141420; border: 1px solid #2a2a3a; border-radius: 16px; padding: 26px; width: 480px; max-width: 95vw; }
+    .hv-modal-title { font-size: 17px; font-weight: 700; color: #e2e8f0; margin-bottom: 18px; }
+    .hv-modal-label { font-size: 12px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; margin-top: 12px; display: block; }
+    .hv-modal-input { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #e2e8f0; font-size: 14px; padding: 10px 12px; outline: none; font-family: inherit; transition: border-color .2s; }
+    .hv-modal-input:focus { border-color: #6366f1; }
+    .hv-modal-textarea { min-height: 80px; resize: vertical; }
+    .hv-modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    .hv-modal-cancel { background: #1a1a1a; border: 1px solid #2a2a2a; color: #9898b0; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .hv-modal-save { background: #4f46e5; border: none; color: #fff; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .hv-modal-save:hover { background: #4338ca; }
     .btn-manage-channels { background: #1f2937; color: #94a3b8; border: 1px solid #374151; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s; }
     .btn-manage-channels:hover { background: #374151; color: #e2e8f0; }
 
@@ -694,6 +741,7 @@ app.get('/', async (req, res) => {
   <nav class="header-nav">
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
     <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
+    <button class="nav-tab" data-section="hooks" onclick="showSection('hooks')">🔖 Hooks</button>
     <button class="nav-tab" data-section="canal" onclick="showSection('canal')">Mi Canal</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="calendario" onclick="showSection('calendario')">Calendario</button>
@@ -775,6 +823,68 @@ app.get('/', async (req, res) => {
   </div>
   <div class="outliers-grid" id="outliers-grid">
     ${outlierCards}
+  </div>
+</section>
+
+<!-- ── HOOK VAULT ── -->
+<section id="section-hooks" class="section">
+  <div class="section-header">
+    <h2 class="section-title">🔖 Hook Vault</h2>
+    <button class="btn-gen" onclick="openHvModal()">+ Nuevo hook</button>
+  </div>
+
+  <div class="hv-toolbar">
+    <input class="hv-search" id="hv-search" type="text" placeholder="Buscar hooks..." oninput="renderHooks()"/>
+    <div class="hv-filter-row" id="hv-filters">
+      <button class="hv-filter active" data-type="all" onclick="setHvType('all',this)">Todos</button>
+      <button class="hv-filter" data-type="historia" onclick="setHvType('historia',this)">Historia</button>
+      <button class="hv-filter" data-type="tensión" onclick="setHvType('tensión',this)">Tensión</button>
+      <button class="hv-filter" data-type="lista" onclick="setHvType('lista',this)">Lista</button>
+      <button class="hv-filter" data-type="pregunta" onclick="setHvType('pregunta',this)">Pregunta</button>
+      <button class="hv-filter" data-type="cambio" onclick="setHvType('cambio',this)">Cambio</button>
+      <button class="hv-filter" data-type="controversia" onclick="setHvType('controversia',this)">Controversia</button>
+      <button class="hv-filter" data-type="dato" onclick="setHvType('dato',this)">Dato</button>
+      <button class="hv-filter" data-type="motivación" onclick="setHvType('motivación',this)">Motivación</button>
+    </div>
+  </div>
+  <div class="hv-stats" id="hv-stats"></div>
+
+  <div id="hv-table-wrap">
+    <div class="hv-empty">Cargando hooks...</div>
+  </div>
+
+  <!-- Add hook modal -->
+  <div class="hv-modal-overlay" id="hv-modal-overlay" style="display:none;" onclick="if(event.target===this)closeHvModal()">
+    <div class="hv-modal">
+      <div class="hv-modal-title" id="hv-modal-title">Nuevo hook</div>
+      <label class="hv-modal-label">Texto del hook *</label>
+      <textarea class="hv-modal-input hv-modal-textarea" id="hv-text" placeholder='"[Número] cosas que nadie te dice sobre [tema]."'></textarea>
+      <label class="hv-modal-label">Tipo</label>
+      <select class="hv-modal-input" id="hv-type">
+        <option value="historia">Historia</option>
+        <option value="tensión">Tensión</option>
+        <option value="lista">Lista</option>
+        <option value="pregunta">Pregunta</option>
+        <option value="cambio">Cambio</option>
+        <option value="controversia">Controversia</option>
+        <option value="dato">Dato</option>
+        <option value="motivación">Motivación</option>
+      </select>
+      <label class="hv-modal-label">Plataforma</label>
+      <select class="hv-modal-input" id="hv-platform">
+        <option value="">Cualquiera</option>
+        <option value="YouTube">YouTube</option>
+        <option value="Instagram">Instagram</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Threads">Threads</option>
+        <option value="Facebook">Facebook</option>
+        <option value="Pinterest">Pinterest</option>
+      </select>
+      <div class="hv-modal-footer">
+        <button class="hv-modal-cancel" onclick="closeHvModal()">Cancelar</button>
+        <button class="hv-modal-save" onclick="saveHvHook()">Guardar hook</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1217,6 +1327,7 @@ app.get('/', async (req, res) => {
     if (id === 'uso') loadUso();
     if (id === 'canal') loadCanal();
     if (id === 'hoy') loadHoyCanal();
+    if (id === 'hooks') loadHookVault();
     if (id === 'metas') loadMetas();
     if (id === 'calendario') loadCalendario();
     if (id === 'ideas-kanban') loadKanban();
@@ -2587,6 +2698,173 @@ app.get('/', async (req, res) => {
     if (resultEl) {
       const saveBtn = resultEl.querySelector('.btn-fb-save-income');
       if (saveBtn) { saveBtn.textContent = '✓ Guardado'; saveBtn.disabled = true; }
+    }
+  }
+
+  // ── Hook Vault ────────────────────────────────────────────────────────────
+  let _hvHooks = [];
+  let _hvType  = 'all';
+  let _hvLoaded = false;
+
+  const HV_TYPE_LABELS = {
+    historia: 'Historia', tensión: 'Tensión', lista: 'Lista',
+    pregunta: 'Pregunta', cambio: 'Cambio', controversia: 'Controversia',
+    dato: 'Dato', motivación: 'Motivación',
+  };
+
+  async function loadHookVault() {
+    if (_hvLoaded) { renderHooks(); return; }
+    try {
+      const r = await fetch('/api/hooks');
+      const d = await r.json();
+      _hvHooks = d.data || [];
+      _hvLoaded = true;
+    } catch (_) { _hvHooks = []; }
+    renderHooks();
+  }
+
+  function setHvType(type, btn) {
+    _hvType = type;
+    document.querySelectorAll('.hv-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderHooks();
+  }
+
+  function renderHooks() {
+    const query   = (document.getElementById('hv-search')?.value || '').toLowerCase();
+    const wrap    = document.getElementById('hv-table-wrap');
+    const statsEl = document.getElementById('hv-stats');
+    if (!wrap) return;
+
+    const filtered = _hvHooks.filter(h => {
+      const typeOk = _hvType === 'all' || h.type === _hvType;
+      const textOk = !query || h.text.toLowerCase().includes(query) || (h.sourceTitle||'').toLowerCase().includes(query);
+      return typeOk && textOk;
+    });
+
+    if (statsEl) statsEl.textContent = \`\${filtered.length} hook\${filtered.length !== 1 ? 's' : ''} · \${_hvHooks.length} en total\`;
+
+    if (filtered.length === 0) {
+      wrap.innerHTML = \`<div class="hv-empty">\${_hvHooks.length === 0 ? 'Aún no has guardado ningún hook. Pulsa 🔖 en un outlier o "+ Nuevo hook".' : 'Sin resultados para esa búsqueda.'}</div>\`;
+      return;
+    }
+
+    wrap.innerHTML = \`
+      <table class="hv-table">
+        <thead><tr>
+          <th style="width:55%">HOOK</th>
+          <th>TIPO</th>
+          <th>PLATAFORMA</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          \${filtered.map(h => {
+            const safeText = h.text.replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'").replace(/\\n/g,' ');
+            return \`
+            <tr>
+              <td>
+                <div class="hv-hook-text">\${escHv(h.text)}</div>
+                \${h.sourceTitle ? \`<div class="hv-hook-source">📺 \${escHv(h.sourceTitle)}\${h.sourceScore ? ' · ' + h.sourceScore + 'x' : ''}</div>\` : ''}
+              </td>
+              <td><span class="hv-type-badge hv-type-\${h.type}">\${HV_TYPE_LABELS[h.type] || h.type}</span></td>
+              <td style="font-size:12px;color:#6b7280;">\${escHv(h.platform || '—')}</td>
+              <td>
+                <div class="hv-actions-cell">
+                  <button class="btn-hv-usar" onclick="useHook('\${safeText}')">Usar</button>
+                  <button class="btn-hv-del" onclick="deleteHvHook('\${h.id}')">✕</button>
+                </div>
+              </td>
+            </tr>\`;
+          }).join('')}
+        </tbody>
+      </table>
+    \`;
+  }
+
+  function escHv(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function useHook(text) {
+    showSection('repurposer');
+    setTimeout(() => {
+      const ta = document.getElementById('repurpose-input');
+      if (ta) { ta.value = text; ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 200);
+  }
+
+  async function deleteHvHook(id) {
+    if (!confirm('¿Eliminar este hook?')) return;
+    try {
+      await fetch(\`/api/hooks/\${id}\`, { method: 'DELETE' });
+      _hvHooks = _hvHooks.filter(h => h.id !== id);
+      renderHooks();
+    } catch (_) {}
+  }
+
+  function openHvModal(prefill) {
+    document.getElementById('hv-text').value = prefill?.text || '';
+    document.getElementById('hv-type').value = prefill?.type || 'historia';
+    document.getElementById('hv-platform').value = prefill?.platform || '';
+    document.getElementById('hv-modal-overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('hv-text').focus(), 50);
+  }
+
+  function closeHvModal() {
+    document.getElementById('hv-modal-overlay').style.display = 'none';
+  }
+
+  async function saveHvHook() {
+    const text = document.getElementById('hv-text').value.trim();
+    if (!text) { document.getElementById('hv-text').focus(); return; }
+    const payload = {
+      text,
+      type: document.getElementById('hv-type').value,
+      platform: document.getElementById('hv-platform').value,
+      source: 'manual',
+    };
+    try {
+      const r = await fetch('/api/hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (d.ok) { _hvHooks.unshift(d.data); closeHvModal(); renderHooks(); }
+    } catch (_) { alert('Error guardando el hook.'); }
+  }
+
+  async function saveOutlierHook(index, event) {
+    event.stopPropagation();
+    const btn = document.getElementById(\`hook-btn-\${index}\`);
+    if (btn && btn.classList.contains('saved')) return;
+    const v = videos[index];
+    if (!v) return;
+    const payload = {
+      text: v.title,
+      type: 'historia',
+      platform: 'YouTube',
+      source: 'outlier',
+      sourceTitle: v.title,
+      sourceViews: v.views,
+      sourceScore: v.score,
+    };
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = '...'; }
+      const r = await fetch('/api/hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        _hvHooks.unshift(d.data);
+        _hvLoaded = true;
+        if (btn) { btn.classList.add('saved'); btn.textContent = '✓'; btn.disabled = false; }
+      }
+    } catch (_) {
+      if (btn) { btn.disabled = false; btn.textContent = '🔖'; }
     }
   }
 </script>
@@ -4016,6 +4294,7 @@ app.get('/usage-data', async (req, res) => {
 // ── Content Calendar API ──────────────────────────────────────────────────────
 const postsService = require('./postsService');
 const ideasService = require('./ideasService');
+const hookService = require('./hookService');
 
 // Posts API
 app.get('/api/posts', async (req, res) => {
@@ -4369,6 +4648,28 @@ app.post('/published/:date', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Hook Vault API ─────────────────────────────────────────────────────────────
+app.get('/api/hooks', async (req, res) => {
+  try {
+    const hooks = await hookService.getAllHooks();
+    res.json({ ok: true, data: hooks });
+  } catch (err) { res.json({ ok: false, error: err.message }); }
+});
+
+app.post('/api/hooks', async (req, res) => {
+  try {
+    const hook = await hookService.createHook(req.body);
+    res.json({ ok: true, data: hook });
+  } catch (err) { res.json({ ok: false, error: err.message }); }
+});
+
+app.delete('/api/hooks/:id', async (req, res) => {
+  try {
+    await hookService.deleteHook(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: false, error: err.message }); }
 });
 
 function startServer() {
