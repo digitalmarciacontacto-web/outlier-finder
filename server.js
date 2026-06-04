@@ -1529,14 +1529,26 @@ app.get('/', async (req, res) => {
       const res = await fetch('/api/social-outliers/facebook');
       const d = await res.json();
       if (!d.ok && d.code === 'NO_TOKEN') {
-        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Meta</strong> desde la sección Hoy para ver tus outliers de Facebook.</p></div>\`;
+        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Meta</strong> desde la sección Hoy para ver tus outliers de Facebook.</p><br><button class="btn-registrar-semana" onclick="connectMeta()">🔌 Conectar Meta</button></div>\`;
         return;
       }
-      if (!d.ok) throw new Error(d.error || 'Error al cargar Facebook');
+      if (!d.ok && d.code === 'NEED_RECONNECT') {
+        el.innerHTML = \`<div class="social-connect-prompt">
+          <p style="margin-bottom:12px;">⚠️ El token de Meta necesita actualizarse con nuevos permisos para leer posts.</p>
+          <button class="btn-registrar-semana" onclick="connectMeta()">🔌 Reconectar Meta</button>
+          <p style="margin-top:10px;font-size:11px;color:#6b7280;">Esto abrirá el flujo de Facebook y te pedirá confirmar los permisos.</p>
+        </div>\`;
+        return;
+      }
+      if (!d.ok) {
+        el.innerHTML = \`<div class="social-empty">Error al cargar Facebook: \${d.error || 'desconocido'}</div>\`;
+        return;
+      }
       _fbOutliersLoaded = true;
+      const engNote = d.hasEngagement === false ? \` <span style="font-size:11px;color:#f59e0b;">· Sin datos de engagement (reconecta Meta)</span>\` : '';
       el.innerHTML = \`<div class="social-platform-header">
-        <div class="social-platform-title">📘 \${d.page || 'Digital.Marcia'} — Mis posts outliers</div>
-        <span class="social-avg-badge">Engagement promedio: \${d.avgEngagement}</span>
+        <div class="social-platform-title">📘 \${d.page || 'Digital.Marcia'} — Mis posts outliers\${engNote}</div>
+        <span class="social-avg-badge">Promedio: \${d.avgEngagement} eng.</span>
         <button class="btn-tt-refresh" onclick="_fbOutliersLoaded=false;loadFbOutliers()">↻ Refrescar</button>
       </div>
       <div id="fb-cards-inner"></div>\`;
@@ -1553,15 +1565,30 @@ app.get('/', async (req, res) => {
     try {
       const res = await fetch('/api/social-outliers/instagram');
       const d = await res.json();
-      if (!d.ok && (d.code === 'NO_TOKEN' || d.code === 'NO_IG')) {
-        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Instagram Business</strong> vinculado a tu página de Facebook para ver tus outliers de Instagram.</p></div>\`;
+      if (!d.ok && d.code === 'NO_TOKEN') {
+        el.innerHTML = \`<div class="social-connect-prompt"><p>Conecta <strong>Meta</strong> desde la sección Hoy.</p><br><button class="btn-registrar-semana" onclick="connectMeta()">🔌 Conectar Meta</button></div>\`;
         return;
       }
-      if (!d.ok) throw new Error(d.error || 'Error al cargar Instagram');
+      if (!d.ok && d.code === 'NEED_RECONNECT') {
+        el.innerHTML = \`<div class="social-connect-prompt">
+          <p style="margin-bottom:12px;">⚠️ El token de Meta necesita nuevos permisos para leer posts de Instagram.</p>
+          <button class="btn-registrar-semana" onclick="connectMeta()">🔌 Reconectar Meta</button>
+          <p style="margin-top:10px;font-size:11px;color:#6b7280;">Confirma los permisos de Instagram en el flujo de Facebook.</p>
+        </div>\`;
+        return;
+      }
+      if (!d.ok && d.code === 'NO_IG') {
+        el.innerHTML = \`<div class="social-connect-prompt"><p>No se encontró una cuenta de <strong>Instagram Business</strong> vinculada a tu página de Facebook.<br><br>Ve a la configuración de Instagram y vincula la cuenta a tu página de Facebook Business.</p></div>\`;
+        return;
+      }
+      if (!d.ok) {
+        el.innerHTML = \`<div class="social-empty">Error: \${d.error || 'desconocido'}</div>\`;
+        return;
+      }
       _igOutliersLoaded = true;
       el.innerHTML = \`<div class="social-platform-header">
         <div class="social-platform-title">📸 \${d.account || '@digital.marcia'} — Mis posts outliers</div>
-        <span class="social-avg-badge">Engagement promedio: \${d.avgEngagement}</span>
+        <span class="social-avg-badge">Promedio: \${d.avgEngagement} eng.</span>
         <button class="btn-tt-refresh" onclick="_igOutliersLoaded=false;loadIgOutliers()">↻ Refrescar</button>
       </div>
       <div id="ig-cards-inner"></div>\`;
@@ -2067,7 +2094,7 @@ app.get('/', async (req, res) => {
     const appId = window._metaAppId;
     if (!appId) return;
     const redirectUri = encodeURIComponent('https://outlier-finder-production-4085.up.railway.app/meta-callback');
-    const scope = encodeURIComponent('pages_show_list,pages_read_engagement');
+    const scope = encodeURIComponent('pages_show_list,pages_read_engagement,instagram_basic,pages_read_user_content');
     window.location.href = \`https://www.facebook.com/dialog/oauth?client_id=\${appId}&redirect_uri=\${redirectUri}&scope=\${scope}&response_type=token\`;
   }
 
@@ -5190,27 +5217,50 @@ app.get('/api/social-outliers/facebook', async (req, res) => {
     if (!page) return res.json({ ok: false, code: 'NO_PAGE', posts: [] });
     const pageToken = page.access_token || metaToken;
 
-    const postsRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/posts`, {
-      params: {
-        fields: 'id,message,story,created_time,permalink_url,likes.summary(true),comments.summary(true),shares',
-        limit: 30,
-        access_token: pageToken,
-      },
-    });
-    const rawPosts = postsRes.data.data || [];
+    // Fetch posts — use reactions (modern) + comments. If that fails, fallback to posts without engagement.
+    let rawPosts = [];
+    let hasEngagement = true;
+    try {
+      const postsRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/feed`, {
+        params: {
+          fields: 'id,message,story,created_time,permalink_url,reactions.summary(true),comments.summary(true),shares',
+          limit: 30,
+          access_token: pageToken,
+        },
+      });
+      rawPosts = postsRes.data.data || [];
+    } catch (engErr) {
+      const errCode = engErr.response?.data?.error?.code;
+      // If permission error, try without engagement fields
+      if (errCode === 10 || errCode === 200) {
+        hasEngagement = false;
+        const fallbackRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/feed`, {
+          params: { fields: 'id,message,story,created_time,permalink_url', limit: 30, access_token: pageToken },
+        });
+        rawPosts = fallbackRes.data.data || [];
+      } else {
+        const errMsg = engErr.response?.data?.error?.message || engErr.message;
+        const isPermErr = errCode === 10 || /permission/i.test(errMsg);
+        return res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
+      }
+    }
+
     const posts = rawPosts.map(p => {
-      const likes = p.likes?.summary?.total_count || 0;
-      const comments = p.comments?.summary?.total_count || 0;
-      const shares = p.shares?.count || 0;
-      const engagement = likes + comments * 2 + shares * 3;
-      return { id: p.id, text: (p.message || p.story || '').slice(0, 280), url: p.permalink_url || '', date: p.created_time, likes, comments, shares, engagement };
+      const reactions = p.reactions?.summary?.total_count ?? (p.likes?.summary?.total_count ?? 0);
+      const comments = p.comments?.summary?.total_count ?? 0;
+      const shares = p.shares?.count ?? 0;
+      const engagement = reactions + comments * 2 + shares * 3;
+      return { id: p.id, text: (p.message || p.story || '').slice(0, 280), url: p.permalink_url || '', date: p.created_time, likes: reactions, comments, shares, engagement };
     });
-    if (posts.length === 0) return res.json({ ok: true, posts: [], page: page.name, avgEngagement: 0 });
+    if (posts.length === 0) return res.json({ ok: true, posts: [], page: page.name, avgEngagement: 0, hasEngagement });
     const avg = posts.reduce((s, p) => s + p.engagement, 0) / posts.length;
     const scored = posts.map(p => ({ ...p, score: avg > 0 ? parseFloat((p.engagement / avg).toFixed(1)) : 0 })).sort((a, b) => b.score - a.score);
-    res.json({ ok: true, posts: scored, page: page.name, avgEngagement: Math.round(avg) });
+    res.json({ ok: true, posts: scored, page: page.name, avgEngagement: Math.round(avg), hasEngagement });
   } catch (err) {
-    res.json({ ok: false, error: err.response?.data?.error?.message || err.message, posts: [] });
+    const errMsg = err.response?.data?.error?.message || err.message;
+    const errCode = err.response?.data?.error?.code;
+    const isPermErr = errCode === 10 || errCode === 200 || /permission/i.test(errMsg);
+    res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
   }
 });
 
@@ -5218,20 +5268,27 @@ app.get('/api/social-outliers/instagram', async (req, res) => {
   const metaToken = await loadMetaToken();
   if (!metaToken) return res.json({ ok: false, code: 'NO_TOKEN', posts: [] });
   try {
+    // Same page resolution as /my-channel (which works)
     const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
-      params: { access_token: metaToken, fields: 'id,name,access_token' },
+      params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' },
     });
     const pages = pagesRes.data.data || [];
     const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
     if (!page) return res.json({ ok: false, code: 'NO_PAGE', posts: [] });
     const pageToken = page.access_token || metaToken;
+
     const pageDetail = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
-      params: { fields: 'instagram_business_account', access_token: pageToken },
+      params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken },
     });
     const igId = pageDetail.data.instagram_business_account?.id;
-    if (!igId) return res.json({ ok: false, code: 'NO_IG', posts: [] });
+    if (!igId) return res.json({ ok: false, code: 'NO_IG', error: 'No se encontró cuenta de Instagram Business vinculada a esta página.', posts: [] });
+
     const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}/media`, {
-      params: { fields: 'id,caption,media_type,timestamp,permalink,like_count,comments_count,thumbnail_url,media_url', limit: 30, access_token: pageToken },
+      params: {
+        fields: 'id,caption,media_type,timestamp,permalink,like_count,comments_count,thumbnail_url,media_url',
+        limit: 30,
+        access_token: pageToken,
+      },
     });
     const rawMedia = mediaRes.data.data || [];
     const posts = rawMedia.map(m => ({
@@ -5245,7 +5302,10 @@ app.get('/api/social-outliers/instagram', async (req, res) => {
     const scored = posts.map(p => ({ ...p, score: avg > 0 ? parseFloat((p.engagement / avg).toFixed(1)) : 0 })).sort((a, b) => b.score - a.score);
     res.json({ ok: true, posts: scored, account: '@digital.marcia', avgEngagement: Math.round(avg) });
   } catch (err) {
-    res.json({ ok: false, error: err.response?.data?.error?.message || err.message, posts: [] });
+    const errMsg = err.response?.data?.error?.message || err.message;
+    const errCode = err.response?.data?.error?.code;
+    const isPermErr = errCode === 10 || errCode === 200 || /permission|oauth/i.test(errMsg);
+    res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
   }
 });
 
