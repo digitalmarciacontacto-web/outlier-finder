@@ -2,11 +2,11 @@ const cron = require('node-cron');
 const { runAnalysis } = require('../analyzer');
 
 function startScheduler() {
-  console.log('⏰ Cron configurado para las 8:00 AM diariamente (America/Mexico_City).');
+  console.log('⏰ Cron configurado para LUNES 9:00 AM (America/Mexico_City) — análisis semanal.');
   console.log('   Usa "npm run run-now" para ejecutar un análisis inmediato.\n');
 
-  cron.schedule('0 8 * * *', async () => {
-    console.log(`\n[${new Date().toISOString()}] ⏰ Ejecutando análisis diario...`);
+  cron.schedule('0 9 * * 1', async () => {
+    console.log(`\n[${new Date().toISOString()}] ⏰ Ejecutando análisis semanal (lunes)...`);
     try {
       await runAnalysis();
     } catch (err) {
