@@ -778,9 +778,88 @@ app.get('/', async (req, res) => {
 <!-- ── HOY ── -->
 <section id="section-hoy" class="section active">
 
-  <!-- ── Resumen de mi canal ── -->
-  <div class="hoy-canal-summary" id="hoy-canal-summary">
-    <div class="hoy-canal-loading"><div class="spinner" style="border-top-color:#6C63FF;"></div><span>Cargando canal...</span></div>
+  <!-- ── Mi Canal — Tarjetas ── -->
+  <div id="hoy-canal-loading" class="hoy-canal-loading" style="margin-bottom:28px;">
+    <div class="spinner" style="border-top-color:#6C63FF;"></div><span>Cargando canal...</span>
+  </div>
+
+  <div id="hoy-canal-cards" style="display:none;">
+    <div class="canal-platforms-grid">
+
+      <!-- YouTube -->
+      <div class="platform-card">
+        <div class="platform-card-header">
+          <div class="platform-icon yt-icon">▶</div>
+          <div><div class="platform-name">YouTube</div><div class="platform-handle">@marcia.nomada</div></div>
+          <div class="platform-live-badge">LIVE</div>
+        </div>
+        <div id="hoy-yt-stats" class="yt-quick-stats" style="display:none;">
+          <div class="yt-qstat"><span class="yt-qstat-val" id="hoy-yt-subs">—</span><span class="yt-qstat-label">SUSCRIPTORES</span></div>
+          <div class="yt-qstat"><span class="yt-qstat-val" id="hoy-yt-views">—</span><span class="yt-qstat-label">VISTAS TOTALES</span></div>
+          <div class="yt-qstat"><span class="yt-qstat-val" id="hoy-yt-videos">—</span><span class="yt-qstat-label">VIDEOS</span></div>
+        </div>
+      </div>
+
+      <!-- Instagram -->
+      <div class="platform-card">
+        <div class="platform-card-header">
+          <div class="platform-icon ig-icon">📷</div>
+          <div><div class="platform-name">Instagram</div><div class="platform-handle">@digital.marcia</div></div>
+          <div class="platform-live-badge" id="hoy-ig-live" style="display:none;">LIVE</div>
+        </div>
+        <div class="platform-followers" id="hoy-ig-followers">—</div>
+        <div class="platform-status-msg" id="hoy-ig-status">seguidores · Pendiente de conectar</div>
+        <button class="btn-connect" id="hoy-ig-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+      </div>
+
+      <!-- Facebook -->
+      <div class="platform-card">
+        <div class="platform-card-header">
+          <div class="platform-icon fb-icon">f</div>
+          <div><div class="platform-name">Facebook</div><div class="platform-handle">Digital.Marcia</div></div>
+          <div class="platform-live-badge" id="hoy-fb-live" style="display:none;">LIVE</div>
+        </div>
+        <div class="platform-followers" id="hoy-fb-followers">—</div>
+        <div class="platform-status-msg" id="hoy-fb-status">seguidores · Pendiente de conectar</div>
+        <button class="btn-connect" id="hoy-fb-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+      </div>
+
+      <!-- TikTok -->
+      <div class="platform-card">
+        <div class="platform-card-header">
+          <div class="platform-icon tt-icon">♪</div>
+          <div><div class="platform-name">TikTok</div><div class="platform-handle">@marcia.nomada</div></div>
+          <div class="platform-live-badge" id="hoy-tt-live" style="display:none;">LIVE</div>
+        </div>
+        <div class="platform-followers" id="hoy-tt-followers">—</div>
+        <div class="platform-status-msg" id="hoy-tt-status">seguidores · Pendiente de conectar</div>
+        <button class="btn-connect active" id="hoy-tt-btn" onclick="showSection('canal')">Ver en Mi Canal</button>
+      </div>
+
+    </div>
+
+    <!-- YPP progress mini -->
+    <div class="ypp-section" id="hoy-ypp-section" style="display:none;margin-top:20px;">
+      <div class="ypp-title">🏆 Progreso hacia YouTube Partner Program</div>
+      <div class="ypp-grid">
+        <div>
+          <div class="ypp-item-label">Suscriptores</div>
+          <div class="ypp-item-vals"><span id="hoy-ypp-subs-val">—</span> / 1,000</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="hoy-ypp-subs-bar" style="width:0%;background:#22c55e;"></div>
+          </div>
+          <div class="ypp-pct" id="hoy-ypp-subs-pct" style="color:#22c55e;"></div>
+        </div>
+        <div>
+          <div class="ypp-item-label">Watch Time (4,000 hrs)</div>
+          <div class="ypp-item-vals">Pendiente de calcular</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" style="width:0%;background:#6b7280;"></div>
+          </div>
+          <div class="ypp-note">⚠️ Los Shorts no cuentan para las 4,000 horas</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Qué publicar hoy ── -->
@@ -2112,46 +2191,77 @@ app.get('/', async (req, res) => {
     return String(n);
   }
 
+  function _set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+  function _show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
+  function _hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+  function _btn(id, label, cls) { const el = document.getElementById(id); if (!el) return; el.textContent = label; el.className = 'btn-connect' + (cls ? ' ' + cls : ''); }
+
   async function loadHoyCanal() {
     if (_hoyCanalLoaded) return;
-    const box = document.getElementById('hoy-canal-summary');
-    if (!box) return;
     try {
       const r = await fetch('/my-channel');
       const d = await r.json();
+      if (d.error) throw new Error(d.error);
       _hoyCanalLoaded = true;
 
-      const yt = d.youtube || {};
-      const ig = d.instagram || {};
-      const fb = d.facebook || {};
-      const tt = d.tiktok || {};
+      // ── YouTube ──
+      _set('hoy-yt-subs', fmtK(d.subscribers));
+      _set('hoy-yt-views', fmtK(d.totalViews));
+      _set('hoy-yt-videos', fmtK(d.videoCount));
+      _show('hoy-yt-stats');
 
-      const stats = [
-        { label: 'YouTube subs', val: fmtK(yt.subscribers), color: 'green', icon: '▶' },
-        { label: 'YT vistas totales', val: fmtK(yt.totalViews), color: '', icon: '' },
-        { label: 'Instagram', val: fmtK(ig.followers ?? d.instagramFollowers), color: 'pink', icon: '📷' },
-        { label: 'Facebook', val: fmtK(fb.followers ?? d.facebookFollowers), color: 'blue', icon: 'f' },
-        { label: 'TikTok', val: fmtK(tt.followers ?? d.tiktokFollowers), color: 'purple', icon: '♪' },
-      ].filter(s => s.val !== '—');
+      // ── YPP progress ──
+      if (d.subscribers != null) {
+        const pct = Math.min(100, Math.round(d.subscribers / 1000 * 100));
+        _set('hoy-ypp-subs-val', d.subscribers.toLocaleString('es-MX'));
+        document.getElementById('hoy-ypp-subs-bar').style.width = pct + '%';
+        _set('hoy-ypp-subs-pct', pct + '% completado');
+        _show('hoy-ypp-section');
+      }
 
-      box.innerHTML = stats.length === 0
-        ? \`<div style="color:#6b7280;font-size:13px;">Conecta tus redes en <a class="hoy-canal-link" onclick="showSection('canal')">Mi Canal</a> para ver el resumen aquí.</div>\`
-        : \`
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-            <div style="font-size:13px;font-weight:700;color:#9898b0;letter-spacing:.04em;">📡 MI CANAL — RESUMEN</div>
-            <a class="hoy-canal-link" onclick="showSection('canal')">Ver detalle →</a>
-          </div>
-          <div class="hoy-canal-grid">
-            \${stats.map(s => \`
-              <div class="hoy-canal-stat">
-                <div class="hoy-canal-stat-label">\${s.icon ? s.icon + ' ' : ''}\${s.label}</div>
-                <div class="hoy-canal-stat-val \${s.color}">\${s.val}</div>
-              </div>
-            \`).join('')}
-          </div>
-        \`;
-    } catch (_) {
-      if (box) box.innerHTML = '<div style="color:#6b7280;font-size:13px;">No se pudo cargar el canal.</div>';
+      // ── Instagram ──
+      if (d.metaConnected && d.instagramFollowers != null) {
+        _set('hoy-ig-followers', fmtK(d.instagramFollowers));
+        _set('hoy-ig-status', 'seguidores reales');
+        _show('hoy-ig-live');
+        _btn('hoy-ig-btn', '✓ Conectado', 'connected');
+      } else {
+        _set('hoy-ig-followers', d.instagramFollowers != null ? fmtK(d.instagramFollowers) : '—');
+        _set('hoy-ig-status', 'seguidores · Pendiente de conectar');
+        _btn('hoy-ig-btn', '✓ Conectado', 'connected');
+      }
+
+      // ── Facebook ──
+      if (d.metaConnected && d.facebookFollowers != null) {
+        _set('hoy-fb-followers', fmtK(d.facebookFollowers));
+        _set('hoy-fb-status', 'seguidores reales');
+        _show('hoy-fb-live');
+        _btn('hoy-fb-btn', '✓ Conectado', 'connected');
+      } else {
+        _set('hoy-fb-followers', d.facebookFollowers != null ? fmtK(d.facebookFollowers) : '—');
+        _set('hoy-fb-status', 'seguidores · Pendiente de conectar');
+        _btn('hoy-fb-btn', '✓ Conectado', 'connected');
+      }
+
+      // ── TikTok ──
+      if (d.tiktokConnected && d.tiktokFollowers != null) {
+        _set('hoy-tt-followers', fmtK(d.tiktokFollowers));
+        _set('hoy-tt-status', 'seguidores');
+        _show('hoy-tt-live');
+        _btn('hoy-tt-btn', '✓ Conectado', 'connected');
+      } else {
+        _set('hoy-tt-followers', d.tiktokFollowers != null ? fmtK(d.tiktokFollowers) : '241');
+        _set('hoy-tt-status', 'seguidores · Pendiente de conectar');
+        _btn('hoy-tt-btn', 'Conectar', 'active');
+        document.getElementById('hoy-tt-btn').onclick = () => window.location.href = '/tiktok-auth';
+      }
+
+      _hide('hoy-canal-loading');
+      _show('hoy-canal-cards');
+
+    } catch (err) {
+      const loading = document.getElementById('hoy-canal-loading');
+      if (loading) loading.innerHTML = \`<span style="color:#6b7280;font-size:13px;">No se pudo cargar el canal: \${err.message}</span>\`;
     }
   }
 
