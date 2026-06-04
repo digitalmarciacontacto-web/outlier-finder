@@ -1403,6 +1403,8 @@ app.get('/', async (req, res) => {
 
 <script>
   const videos = ${JSON.stringify(videos)};
+  // Meta App ID — injected server-side so connectMeta() works from any section
+  window._metaAppId = ${JSON.stringify(process.env.META_APP_ID || null)};
 
   // ── Tab navigation ──────────────────────────────────────────────────────────
   function showSection(id) {
