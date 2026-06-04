@@ -558,6 +558,9 @@ app.get('/', async (req, res) => {
     /* ── MI CANAL ── */
     .canal-platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
     .platform-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .yt-card-clickable { cursor: pointer; transition: border-color .2s, background .2s; }
+    .yt-card-clickable:hover { border-color: #6366f1; background: #1a1a2e; }
+    .yt-card-clickable.expanded { border-color: #6366f1; }
     .platform-card-header { display: flex; align-items: center; gap: 12px; }
     .platform-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
     .yt-icon { background: #ff0000; color: #fff; font-size: 16px; font-weight: 900; }
@@ -998,7 +1001,7 @@ app.get('/', async (req, res) => {
   <div class="canal-platforms-grid">
 
     <!-- YouTube (real data) -->
-    <div class="platform-card">
+    <div class="platform-card yt-card-clickable" id="yt-platform-card" onclick="toggleYtExpanded()" title="Click para ver videos">
       <div class="platform-card-header">
         <div class="platform-icon yt-icon">▶</div>
         <div>
@@ -1013,6 +1016,7 @@ app.get('/', async (req, res) => {
         <div class="yt-qstat"><span class="yt-qstat-val" id="yt-views-total">—</span><span class="yt-qstat-label">Vistas totales</span></div>
         <div class="yt-qstat"><span class="yt-qstat-val" id="yt-videos-count">—</span><span class="yt-qstat-label">Videos</span></div>
       </div>
+      <div id="yt-expand-hint" style="display:none;font-size:11px;color:#6366f1;margin-top:8px;font-weight:600;">Ver videos ▼</div>
     </div>
 
     <!-- Instagram -->
@@ -1835,6 +1839,18 @@ app.get('/', async (req, res) => {
   document.getElementById('channel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeChannelModal(); });
 
   // ── Mi Canal ─────────────────────────────────────────────────────────────────
+  let _ytExpanded = false;
+  function toggleYtExpanded() {
+    const section = document.getElementById('yt-expanded-section');
+    const card = document.getElementById('yt-platform-card');
+    const hint = document.getElementById('yt-expand-hint');
+    if (!section) return;
+    _ytExpanded = !_ytExpanded;
+    section.style.display = _ytExpanded ? 'block' : 'none';
+    if (card) card.classList.toggle('expanded', _ytExpanded);
+    if (hint) hint.textContent = _ytExpanded ? 'Ocultar videos ▲' : 'Ver videos ▼';
+  }
+
   let canalLoaded = false;
   async function loadCanal() {
     if (canalLoaded) return;
@@ -1903,7 +1919,8 @@ app.get('/', async (req, res) => {
         document.getElementById('yt-avg-row').style.display = 'flex';
       }
 
-      document.getElementById('yt-expanded-section').style.display = 'block';
+      // yt-expanded-section stays hidden until user clicks the YouTube card
+      document.getElementById('yt-expand-hint').style.display = 'block';
 
       // TikTok: update card if connected
       if (data.tiktokConnected) {
