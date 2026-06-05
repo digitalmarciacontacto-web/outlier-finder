@@ -799,8 +799,7 @@ app.get('/', async (req, res) => {
   </div>
   <nav class="header-nav">
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
-    <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">Outliers</button>
-    <button class="nav-tab" data-section="crear" onclick="showSection('crear')">📋 Crear</button>
+    <button class="nav-tab" data-section="crear" onclick="showSection('crear')">🔖 Hooks</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
     <button class="nav-tab" data-section="analytics" onclick="showSection('analytics')">📊 Analytics</button>
@@ -918,6 +917,12 @@ app.get('/', async (req, res) => {
 
   </div>
 
+  <!-- ── Facebook — posts destacados ── -->
+  <div id="hoy-fb-outliers" style="margin-top:28px;display:none;">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📘 Facebook — posts destacados</div>
+    <div id="hoy-fb-list"><div class="spinner" style="border-top-color:#1877f2;"></div></div>
+  </div>
+
   <!-- ── Qué publicar hoy ── -->
   <div class="hoy-pub-section">
     <h3 class="hoy-pub-title">📅 Qué publicar hoy</h3>
@@ -1017,66 +1022,6 @@ app.get('/', async (req, res) => {
 <!-- ── HOOK VAULT ── -->
 <section id="section-crear" class="section">
 
-  <!-- ── Calendario ── -->
-  <div id="cal-module" class="cal-module">
-    <!-- toolbar -->
-    <div class="cal-toolbar">
-      <div class="cal-view-switcher">
-        <button class="cal-view-btn active" data-view="month" onclick="calSwitchView('month',this)">📅 Mes</button>
-        <button class="cal-view-btn" data-view="list" onclick="calSwitchView('list',this)">☰ Lista</button>
-        <button class="cal-view-btn" data-view="ideas" onclick="calSwitchView('ideas',this)">💡 Ideas</button>
-      </div>
-      <div class="cal-nav" id="cal-nav">
-        <button onclick="calPrevMonth()">‹</button>
-        <span id="cal-month-label"></span>
-        <button onclick="calNextMonth()">›</button>
-        <button onclick="calGoToday()">Hoy</button>
-      </div>
-      <div class="cal-platform-filters" id="cal-platform-filters"></div>
-      <button class="btn-gen" onclick="openPostModal()">+ Nuevo post</button>
-    </div>
-    <!-- Stats bar -->
-    <div class="cal-stats-bar" id="cal-stats-bar"></div>
-    <!-- Main content area (month grid / list / ideas) -->
-    <div id="cal-content"></div>
-  </div>
-
-  <!-- Post modal overlay -->
-  <div class="cal-modal-overlay" id="cal-modal-overlay" style="display:none;" onclick="if(event.target===this)closePostModal()">
-    <div class="cal-modal" id="cal-modal">
-      <div class="cal-modal-header">
-        <span id="cal-modal-title">Nuevo post</span>
-        <button onclick="closePostModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div class="cal-modal-split">
-        <div class="cal-modal-form" id="cal-modal-form"></div>
-        <div class="cal-modal-preview">
-          <div class="cal-preview-label">Preview</div>
-          <div class="cal-preview-card" id="cal-preview-card">
-            <div id="prev-hook" style="font-weight:700;margin-bottom:8px;"></div>
-            <div id="prev-body" style="font-size:14px;color:#9898b0;white-space:pre-wrap;"></div>
-            <div id="prev-cta" style="margin-top:8px;color:#6C63FF;font-size:13px;"></div>
-          </div>
-        </div>
-      </div>
-      <div class="cal-modal-footer" id="cal-modal-footer"></div>
-    </div>
-  </div>
-
-  <!-- Idea modal overlay -->
-  <div class="cal-modal-overlay" id="idea-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaModal()">
-    <div class="cal-modal" id="idea-modal" style="max-width:480px;">
-      <div class="cal-modal-header">
-        <span id="idea-modal-title">Nueva idea</span>
-        <button onclick="closeIdeaModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div style="padding:20px;" id="idea-modal-form"></div>
-      <div class="cal-modal-footer" id="idea-modal-footer"></div>
-    </div>
-  </div>
-
-  <div style="height:1px;background:#1e293b;margin:48px 0;"></div>
-
   <!-- ── Hooks ── -->
   <div class="section-header">
     <h2 class="section-title">🔖 Hook Vault</h2>
@@ -1137,73 +1082,6 @@ app.get('/', async (req, res) => {
     </div>
   </div>
 
-  <div style="height:1px;background:#1e293b;margin:48px 0;"></div>
-
-  <!-- ── Ideas Kanban ── -->
-  <div class="section-header">
-    <h2 class="section-title">💡 Ideas</h2>
-    <button class="btn-gen" onclick="openIdeaKanbanModal()">+ Nueva idea</button>
-  </div>
-  <div class="kanban-board" id="kanban-board">
-    <div class="kanban-col" data-stage="idea">
-      <div class="kanban-col-header">💡 Idea</div>
-      <div class="kanban-cards" id="kanban-idea"></div>
-    </div>
-    <div class="kanban-col" data-stage="guion">
-      <div class="kanban-col-header">📝 Guión listo</div>
-      <div class="kanban-cards" id="kanban-guion"></div>
-    </div>
-    <div class="kanban-col" data-stage="filmado">
-      <div class="kanban-col-header">🎬 Filmado</div>
-      <div class="kanban-cards" id="kanban-filmado"></div>
-    </div>
-    <div class="kanban-col" data-stage="editado">
-      <div class="kanban-col-header">✂️ Editado</div>
-      <div class="kanban-cards" id="kanban-editado"></div>
-    </div>
-    <div class="kanban-col" data-stage="publicado">
-      <div class="kanban-col-header">✅ Publicado</div>
-      <div class="kanban-cards" id="kanban-publicado"></div>
-    </div>
-  </div>
-
-  <!-- Nueva idea modal -->
-  <div class="kanban-modal-overlay" id="kanban-modal-overlay" style="display:none;" onclick="if(event.target===this)closeIdeaKanbanModal()">
-    <div class="kanban-modal" id="kanban-modal">
-      <div class="kanban-modal-header">
-        <span id="kanban-modal-title">Nueva idea</span>
-        <button onclick="closeIdeaKanbanModal()" style="background:none;border:none;color:#9898b0;font-size:20px;cursor:pointer;">✕</button>
-      </div>
-      <div class="kanban-modal-body">
-        <label class="kanban-label">Título *</label>
-        <input type="text" id="ki-title" class="kanban-input" placeholder="¿De qué trata tu idea?">
-        <label class="kanban-label">Pilar de contenido</label>
-        <select id="ki-pillar" class="kanban-input">
-          <option value="">Sin pilar</option>
-          <option value="🌍 Escenario">🌍 Escenario</option>
-          <option value="🔄 Proceso">🔄 Proceso</option>
-          <option value="💥 Tensión">💥 Tensión</option>
-          <option value="💑 Vida construida">💑 Vida construida</option>
-        </select>
-        <label class="kanban-label">Plataforma principal</label>
-        <select id="ki-platform" class="kanban-input">
-          <option value="">Sin plataforma</option>
-          <option value="YouTube">YouTube</option>
-          <option value="Instagram">Instagram</option>
-          <option value="TikTok">TikTok</option>
-          <option value="Threads">Threads</option>
-          <option value="Facebook">Facebook</option>
-          <option value="Pinterest">Pinterest</option>
-        </select>
-        <label class="kanban-label">Notas</label>
-        <textarea id="ki-notes" class="kanban-input" rows="3" placeholder="Contexto, referencias, ángulo..."></textarea>
-      </div>
-      <div class="kanban-modal-footer">
-        <button class="kanban-btn-cancel" onclick="closeIdeaKanbanModal()">Cancelar</button>
-        <button class="kanban-btn-save" onclick="saveIdeaKanban()">Guardar idea</button>
-      </div>
-    </div>
-  </div>
 
 </section>
 
@@ -1414,7 +1292,7 @@ app.get('/', async (req, res) => {
     document.querySelector('[data-section="' + id + '"]').classList.add('active');
     if (id === 'uso') loadUso();
     if (id === 'hoy') loadHoyCanal();
-    if (id === 'crear') { loadHookVault(); loadCalendario(); loadKanban(); }
+    if (id === 'crear') { loadHookVault(); }
     if (id === 'metas') loadMetas();
     if (id === 'analytics') loadAnalytics();
   }
@@ -2437,9 +2315,48 @@ app.get('/', async (req, res) => {
       _hide('hoy-canal-loading');
       _show('hoy-canal-cards');
 
+      // Load Facebook outliers in background
+      loadHoyFbOutliers();
+
     } catch (err) {
       const loading = document.getElementById('hoy-canal-loading');
       if (loading) loading.innerHTML = \`<span style="color:#6b7280;font-size:13px;">No se pudo cargar el canal: \${err.message}</span>\`;
+    }
+  }
+
+  async function loadHoyFbOutliers() {
+    const wrap = document.getElementById('hoy-fb-outliers');
+    const list = document.getElementById('hoy-fb-list');
+    if (!wrap || !list) return;
+    try {
+      const r = await fetch('/api/social-outliers/facebook');
+      const d = await r.json();
+      if (d.code === 'NEED_RECONNECT' || d.error) {
+        wrap.style.display = 'none';
+        return;
+      }
+      const items = Array.isArray(d) ? d : (d.outliers || d.posts || []);
+      if (!items.length) { wrap.style.display = 'none'; return; }
+      const avgViews = items.reduce((s, x) => s + (x.views || x.likes || 0), 0) / items.length || 1;
+      const outliers = items
+        .map(x => ({ ...x, score: (x.views || x.likes || 0) / avgViews }))
+        .filter(x => x.score >= 1.3)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+      if (!outliers.length) { wrap.style.display = 'none'; return; }
+      list.innerHTML = outliers.map(x => {
+        const scoreLabel = x.score.toFixed(1) + 'x';
+        const text = (x.message || x.text || x.title || '').slice(0, 120) + (((x.message || x.text || x.title || '').length > 120) ? '…' : '');
+        const link = x.url || x.permalink_url || ('#');
+        return \`<div style="padding:10px 0;border-bottom:1px solid #1e293b;display:flex;gap:12px;align-items:flex-start;">
+          <span style="color:#a78bfa;font-weight:700;font-size:12px;white-space:nowrap;">\${scoreLabel}</span>
+          <span style="font-size:13px;color:#cbd5e1;line-height:1.4;flex:1;">\${text || '(sin texto)'}</span>
+          \${link !== '#' ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;">↗</a>\` : ''}
+        </div>\`;
+      }).join('');
+      wrap.style.display = 'block';
+    } catch (_) {
+      wrap.style.display = 'none';
     }
   }
 
