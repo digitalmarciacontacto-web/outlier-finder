@@ -915,12 +915,15 @@ app.get('/', async (req, res) => {
       </div>
     </div>
 
-  </div>
+    <!-- Outliers toggle -->
+    <div id="fb-outliers-hint" style="display:none;font-size:11px;color:#6366f1;margin-top:16px;font-weight:600;cursor:pointer;" onclick="toggleFbOutliers()">Ver outliers ▼</div>
 
-  <!-- ── Facebook — posts destacados ── -->
-  <div id="hoy-fb-outliers" style="margin-top:28px;display:none;">
-    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📘 Facebook — posts destacados</div>
-    <div id="hoy-fb-list"><div class="spinner" style="border-top-color:#1877f2;"></div></div>
+    <!-- ── Facebook — posts destacados ── -->
+    <div id="hoy-fb-outliers" style="margin-top:12px;display:none;">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📘 Facebook — posts destacados</div>
+      <div id="hoy-fb-list"></div>
+    </div>
+
   </div>
 
   <!-- ── Qué publicar hoy ── -->
@@ -1848,6 +1851,16 @@ app.get('/', async (req, res) => {
     if (hint) hint.textContent = _ytExpanded ? 'Ocultar videos ▲' : 'Ver videos ▼';
   }
 
+  let _fbOutliersExpanded = false;
+  function toggleFbOutliers() {
+    const wrap = document.getElementById('hoy-fb-outliers');
+    const hint = document.getElementById('fb-outliers-hint');
+    if (!wrap) return;
+    _fbOutliersExpanded = !_fbOutliersExpanded;
+    wrap.style.display = _fbOutliersExpanded ? 'block' : 'none';
+    if (hint) hint.textContent = _fbOutliersExpanded ? 'Ocultar outliers ▲' : 'Ver outliers ▼';
+  }
+
   let canalLoaded = false;
   async function loadCanal() {
     if (canalLoaded) return;
@@ -2325,25 +2338,22 @@ app.get('/', async (req, res) => {
   }
 
   async function loadHoyFbOutliers() {
-    const wrap = document.getElementById('hoy-fb-outliers');
+    const hint = document.getElementById('fb-outliers-hint');
     const list = document.getElementById('hoy-fb-list');
-    if (!wrap || !list) return;
+    if (!list) return;
     try {
       const r = await fetch('/api/social-outliers/facebook');
       const d = await r.json();
-      if (d.code === 'NEED_RECONNECT' || d.error) {
-        wrap.style.display = 'none';
-        return;
-      }
+      if (d.code === 'NEED_RECONNECT' || d.error) return;
       const items = Array.isArray(d) ? d : (d.outliers || d.posts || []);
-      if (!items.length) { wrap.style.display = 'none'; return; }
+      if (!items.length) return;
       const avgViews = items.reduce((s, x) => s + (x.views || x.likes || 0), 0) / items.length || 1;
       const outliers = items
         .map(x => ({ ...x, score: (x.views || x.likes || 0) / avgViews }))
         .filter(x => x.score >= 1.3)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
-      if (!outliers.length) { wrap.style.display = 'none'; return; }
+      if (!outliers.length) return;
       list.innerHTML = outliers.map(x => {
         const scoreLabel = x.score.toFixed(1) + 'x';
         const text = (x.message || x.text || x.title || '').slice(0, 120) + (((x.message || x.text || x.title || '').length > 120) ? '…' : '');
@@ -2354,10 +2364,9 @@ app.get('/', async (req, res) => {
           \${link !== '#' ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;">↗</a>\` : ''}
         </div>\`;
       }).join('');
-      wrap.style.display = 'block';
-    } catch (_) {
-      wrap.style.display = 'none';
-    }
+      // Show the toggle button now that we have data
+      if (hint) hint.style.display = 'block';
+    } catch (_) { /* silently ignore */ }
   }
 
   // Auto-load on first render (section-hoy is active by default)
