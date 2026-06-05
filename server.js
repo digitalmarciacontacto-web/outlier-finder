@@ -2344,27 +2344,23 @@ app.get('/', async (req, res) => {
     try {
       const r = await fetch('/api/social-outliers/facebook');
       const d = await r.json();
-      if (d.code === 'NEED_RECONNECT' || d.error) return;
-      const items = Array.isArray(d) ? d : (d.outliers || d.posts || []);
-      if (!items.length) return;
-      const avgViews = items.reduce((s, x) => s + (x.views || x.likes || 0), 0) / items.length || 1;
-      const outliers = items
-        .map(x => ({ ...x, score: (x.views || x.likes || 0) / avgViews }))
-        .filter(x => x.score >= 1.3)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
-      if (!outliers.length) return;
-      list.innerHTML = outliers.map(x => {
-        const scoreLabel = x.score.toFixed(1) + 'x';
-        const text = (x.message || x.text || x.title || '').slice(0, 120) + (((x.message || x.text || x.title || '').length > 120) ? '…' : '');
-        const link = x.url || x.permalink_url || ('#');
+      if (!d.ok || d.code === 'NEED_RECONNECT' || d.code === 'NO_TOKEN') return;
+      // Server already scores & sorts posts by engagement ratio; just take top 5
+      const posts = (d.posts || []).slice(0, 5);
+      if (!posts.length) return;
+      list.innerHTML = posts.map(x => {
+        const scoreLabel = x.score > 0 ? x.score.toFixed(1) + 'x' : '—';
+        const scoreColor = x.score >= 2 ? '#10b981' : x.score >= 1.3 ? '#a78bfa' : '#6b7280';
+        const raw = x.text || '';
+        const text = raw.length > 130 ? raw.slice(0, 130) + '…' : raw;
+        const link = x.url || '';
         return \`<div style="padding:10px 0;border-bottom:1px solid #1e293b;display:flex;gap:12px;align-items:flex-start;">
-          <span style="color:#a78bfa;font-weight:700;font-size:12px;white-space:nowrap;">\${scoreLabel}</span>
+          <span style="color:\${scoreColor};font-weight:700;font-size:12px;white-space:nowrap;min-width:28px;">\${scoreLabel}</span>
           <span style="font-size:13px;color:#cbd5e1;line-height:1.4;flex:1;">\${text || '(sin texto)'}</span>
-          \${link !== '#' ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;">↗</a>\` : ''}
+          \${link ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;">↗</a>\` : ''}
         </div>\`;
       }).join('');
-      // Show the toggle button now that we have data
+      // Show toggle button now that we have data
       if (hint) hint.style.display = 'block';
     } catch (_) { /* silently ignore */ }
   }
