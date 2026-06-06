@@ -1213,7 +1213,52 @@ app.get('/', async (req, res) => {
 
 <!-- ── REPURPOSER ── -->
 <section id="section-repurposer" class="section">
+
+  <!-- ── Módulo Transcripción ── -->
   <div class="section-header">
+    <h2 class="section-title">🎥 Transcribir video</h2>
+  </div>
+  <p class="repurposer-desc">Pega un link de YouTube y obtén el guión completo + análisis de hook y estructura.</p>
+
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
+    <input id="transcribe-url" type="url" placeholder="https://www.youtube.com/watch?v=..."
+      style="flex:1;background:#111827;border:1px solid #2a2a2a;border-radius:8px;color:#e2e8f0;font-size:14px;padding:12px 16px;outline:none;transition:border-color .2s;font-family:inherit;"
+      onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#2a2a2a'"
+      onkeydown="if(event.key==='Enter')transcribeVideo()"/>
+    <button class="btn-repurpose" style="white-space:nowrap;margin:0;" onclick="transcribeVideo()">⬇ Obtener guión</button>
+  </div>
+
+  <div id="transcribe-loading" style="display:none;gap:10px;align-items:center;padding:14px 0;color:#9898b0;font-size:14px;">
+    <div class="spinner" style="border-top-color:#6366f1;width:18px;height:18px;border-width:2px;flex-shrink:0;"></div>
+    <span>Extrayendo y analizando el video con Claude...</span>
+  </div>
+
+  <div id="transcribe-result" style="display:none;">
+    <!-- Analysis cards -->
+    <div id="transcribe-analysis" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;"></div>
+
+    <!-- Full transcript collapsible -->
+    <details style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#6366f1;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+        <span>📄 Transcripción completa</span>
+        <span id="transcribe-wordcount" style="color:#6b7280;font-weight:400;"></span>
+      </summary>
+      <div id="transcribe-text" style="margin-top:14px;font-size:13px;color:#9898b0;line-height:1.7;white-space:pre-wrap;max-height:320px;overflow-y:auto;"></div>
+    </details>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <button class="btn-repurpose" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;" onclick="usarTranscripcion()">↓ Usar guión en Repurposer</button>
+      <button class="btn-repurpose" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;" onclick="copiarCaption()">📋 Copiar caption</button>
+    </div>
+  </div>
+
+  <div id="transcribe-error" style="display:none;color:#f87171;font-size:13px;padding:12px 0;"></div>
+
+  <div style="height:1px;background:#1e293b;margin:36px 0;"></div>
+
+  <!-- ── Repurposer original ── -->
+  <div class="section-header" style="margin-bottom:4px;">
     <h2 class="section-title">♻️ Repurposer</h2>
   </div>
   <p class="repurposer-desc">Convierte un guion o idea en 6 posts para Threads, Facebook y Pinterest.</p>
@@ -1648,6 +1693,72 @@ app.get('/', async (req, res) => {
     navigator.clipboard.writeText(text).then(() => {
       btn.textContent = '✅ Copiado';
       setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
+    });
+  }
+
+  // ── Transcripción ────────────────────────────────────────────────────────────
+  let _lastTranscript = '';
+  let _lastCaption = '';
+
+  async function transcribeVideo() {
+    const url = document.getElementById('transcribe-url').value.trim();
+    if (!url) { alert('Pega una URL de YouTube primero.'); return; }
+    const loading = document.getElementById('transcribe-loading');
+    const result  = document.getElementById('transcribe-result');
+    const errEl   = document.getElementById('transcribe-error');
+    loading.style.display = 'flex';
+    result.style.display  = 'none';
+    errEl.style.display   = 'none';
+    try {
+      const r = await fetch('/api/transcribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const d = await r.json();
+      loading.style.display = 'none';
+      if (!d.ok) { errEl.textContent = '❌ ' + d.error; errEl.style.display = 'block'; return; }
+      _lastTranscript = d.transcript || '';
+      _lastCaption    = d.analysis?.caption || '';
+
+      // Render analysis cards
+      const a = d.analysis || {};
+      const cards = [
+        { label: '🪝 Hook de apertura', content: a.hook, color: '#a78bfa' },
+        { label: '💡 Idea central',     content: a.idea, color: '#34d399' },
+        { label: '📐 Estructura',       content: a.estructura, color: '#60a5fa' },
+        { label: '📱 Caption sugerido', content: a.caption, color: '#f472b6' },
+      ];
+      document.getElementById('transcribe-analysis').innerHTML = cards.map(c =>
+        c.content ? \`<div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;">
+          <div style="font-size:11px;font-weight:700;color:\${c.color};text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">\${c.label}</div>
+          <div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">\${c.content}</div>
+        </div>\` : ''
+      ).join('');
+
+      document.getElementById('transcribe-text').textContent = d.transcript;
+      document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras';
+      result.style.display = 'block';
+    } catch (e) {
+      loading.style.display = 'none';
+      errEl.textContent = '❌ Error de conexión. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    }
+  }
+
+  function usarTranscripcion() {
+    if (!_lastTranscript) return;
+    document.getElementById('repurpose-input').value = _lastTranscript.slice(0, 4000);
+    // scroll to repurpose section
+    document.getElementById('repurpose-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function copiarCaption() {
+    const text = _lastCaption || _lastTranscript.slice(0, 500);
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copiado';
+      setTimeout(() => { btn.textContent = '📋 Copiar caption'; }, 2000);
     });
   }
 
@@ -5231,6 +5342,82 @@ app.get('/api/social-outliers/instagram', async (req, res) => {
     const isPermErr = errCode === 10 || errCode === 200 || /permission|oauth/i.test(errMsg);
     res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
   }
+});
+
+// ── Transcripción de videos ─────────────────────────────────────────────────
+const { YoutubeTranscript } = require('youtube-transcript');
+
+function extractYouTubeId(url) {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+app.post('/api/transcribe', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.json({ ok: false, error: 'URL requerida.' });
+
+  const videoId = extractYouTubeId(url);
+  if (!videoId) return res.json({ ok: false, error: 'No se pudo extraer el ID del video de YouTube. Asegúrate de pegar un link válido.' });
+
+  let rawSegments;
+  try {
+    rawSegments = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
+      .catch(() => YoutubeTranscript.fetchTranscript(videoId)); // fallback to any lang
+  } catch (e) {
+    return res.json({ ok: false, error: 'No se encontraron subtítulos para este video. Prueba con un video que tenga subtítulos automáticos activados.' });
+  }
+
+  if (!rawSegments || rawSegments.length === 0) {
+    return res.json({ ok: false, error: 'Este video no tiene subtítulos disponibles.' });
+  }
+
+  const transcript = rawSegments.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+
+  // Ask Claude to analyze the transcript
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  let analysis;
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 1500,
+      messages: [{
+        role: 'user',
+        content: `Analiza esta transcripción de un video y extrae lo siguiente en español. Responde SOLO con el formato indicado, sin texto extra.
+
+TRANSCRIPCIÓN:
+${transcript.slice(0, 6000)}
+
+---
+HOOK:
+[El gancho de apertura exacto del video — primeras 2-3 oraciones que capturan la atención]
+
+ESTRUCTURA:
+[Lista numerada de los bloques de contenido principales, máx 6 puntos]
+
+IDEA_CENTRAL:
+[1 oración que resume la promesa o transformación del video]
+
+CAPTION_SUGERIDO:
+[Caption listo para publicar en Instagram/TikTok basado en este video, máx 150 palabras, con emojis, en primera persona]
+`
+      }]
+    });
+    const text = msg.content[0].text;
+    const get = (key) => {
+      const m = text.match(new RegExp(`${key}:\\n([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`));
+      return m ? m[1].trim() : '';
+    };
+    analysis = {
+      hook: get('HOOK'),
+      estructura: get('ESTRUCTURA'),
+      idea: get('IDEA_CENTRAL'),
+      caption: get('CAPTION_SUGERIDO'),
+    };
+  } catch (e) {
+    analysis = null;
+  }
+
+  res.json({ ok: true, transcript, wordCount: transcript.split(' ').length, analysis });
 });
 
 function startServer() {
