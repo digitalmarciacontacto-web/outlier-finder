@@ -5429,7 +5429,7 @@ async function transcribeWithWhisper(audioPath) {
   const form = new FormData();
   form.append('file', fs.createReadStream(audioPath), path.basename(audioPath));
   form.append('model', 'whisper-1');
-  form.append('language', 'es');
+  // No forzar idioma → Whisper auto-detecta (inglés, ruso, árabe, etc.)
   form.append('response_format', 'text');
   const r = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
     headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
@@ -5447,23 +5447,23 @@ async function analyzeTranscript(transcript) {
     max_tokens: 1500,
     messages: [{
       role: 'user',
-      content: `Analiza esta transcripción de un video y extrae lo siguiente en español. Responde SOLO con el formato indicado, sin texto extra.
+      content: `Analiza esta transcripción de un video. El video puede estar en cualquier idioma (inglés, ruso, árabe, etc.). SIEMPRE responde en español, sin importar el idioma original. Responde SOLO con el formato indicado, sin texto extra.
 
 TRANSCRIPCIÓN:
 ${transcript.slice(0, 6000)}
 
 ---
 HOOK:
-[El gancho de apertura exacto del video — primeras 2-3 oraciones que capturan la atención]
+[El gancho de apertura exacto del video — traducido y adaptado al español, primeras 2-3 oraciones que capturan la atención]
 
 ESTRUCTURA:
-[Lista numerada de los bloques de contenido principales, máx 6 puntos]
+[Lista numerada de los bloques de contenido principales en español, máx 6 puntos]
 
 IDEA_CENTRAL:
-[1 oración que resume la promesa o transformación del video]
+[1 oración en español que resume la promesa o transformación del video]
 
 CAPTION_SUGERIDO:
-[Caption listo para publicar en Instagram/TikTok basado en este video, máx 150 palabras, con emojis, en primera persona]
+[Caption listo para publicar en Instagram/TikTok, adaptado para tu audiencia hispanohablante, máx 150 palabras, con emojis, en primera persona]
 `
     }]
   });
@@ -5487,8 +5487,8 @@ app.post('/api/transcribe', async (req, res) => {
     const videoId = extractYouTubeId(url);
     if (videoId) {
       try {
-        const segs = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
-          .catch(() => YoutubeTranscript.fetchTranscript(videoId));
+        // Try to get any available language (auto-detect)
+        const segs = await YoutubeTranscript.fetchTranscript(videoId);
         if (segs && segs.length > 0) {
           transcript = segs.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
           method = 'youtube-captions';
