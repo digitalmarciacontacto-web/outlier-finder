@@ -15,7 +15,8 @@ const storiesBank = fs.readFileSync('./stories-bank.md', 'utf8');
 const systemPrompt = `${GINI_BRAND_CONTEXT}\n\n${brandBlueprint}\n\nBANCO DE HISTORIAS REALES:\n${storiesBank}`;
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '35mb' }));  // 25MB file → ~34MB base64
+app.use(express.urlencoded({ limit: '35mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const OUTLIERS_FILE = path.join(__dirname, 'outliers.json');
