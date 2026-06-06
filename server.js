@@ -5539,6 +5539,33 @@ CAPTION_SUGERIDO:
   return { hook: get('HOOK'), estructura: get('ESTRUCTURA'), idea: get('IDEA_CENTRAL'), caption: get('CAPTION_SUGERIDO') };
 }
 
+// Download audio via cobalt.tools API (supports IG, TikTok, YouTube, FB, X, etc.)
+async function downloadAudioViaCobalt(url) {
+  // 1. Ask cobalt for a direct audio URL
+  const cobaltRes = await axios.post('https://api.cobalt.tools/', {
+    url,
+    downloadMode: 'audio',
+    audioFormat: 'mp3',
+    audioQuality: '128',
+    filenameStyle: 'basic',
+  }, {
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    timeout: 20000,
+  });
+
+  const { status, url: directUrl, picker } = cobaltRes.data;
+  if (status === 'error') throw new Error(cobaltRes.data.error?.code || 'cobalt: error al obtener URL');
+
+  const audioUrl = directUrl || picker?.[0]?.url;
+  if (!audioUrl) throw new Error('cobalt: no se obtuvo URL de audio');
+
+  // 2. Download audio to temp file
+  const tmpPath = path.join(os.tmpdir(), `cobalt_${Date.now()}.mp3`);
+  const dlRes = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 60000, maxContentLength: 50 * 1024 * 1024 });
+  fs.writeFileSync(tmpPath, Buffer.from(dlRes.data));
+  return tmpPath;
+}
+
 app.post('/api/transcribe', async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.json({ ok: false, error: 'URL requerida.' });
@@ -5546,33 +5573,48 @@ app.post('/api/transcribe', async (req, res) => {
   let transcript = '';
   let method = '';
 
-  // 1. YouTube: try captions first (free, instant)
+  // 1. YouTube: try captions first (free, instant, no API key needed)
   if (isYouTubeUrl(url)) {
     const videoId = extractYouTubeId(url);
     if (videoId) {
       try {
-        // Try to get any available language (auto-detect)
         const segs = await YoutubeTranscript.fetchTranscript(videoId);
         if (segs && segs.length > 0) {
           transcript = segs.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
           method = 'youtube-captions';
         }
-      } catch (_) { /* fall through to yt-dlp */ }
+      } catch (_) { /* fall through */ }
     }
   }
 
-  // 2. Any URL (including YT fallback): download audio with yt-dlp + Whisper
+  // 2. Any URL: try cobalt.tools (IG, TikTok, FB, X, YouTube fallback, 20+ platforms)
   if (!transcript) {
     if (!process.env.OPENAI_API_KEY) {
-      return res.json({ ok: false, error: 'Este video requiere transcripción con Whisper. Configura OPENAI_API_KEY en las variables de entorno.' });
+      return res.json({ ok: false, error: 'Whisper no configurado. Agrega OPENAI_API_KEY en Railway.' });
     }
     let audioPath = null;
+    let cobaltOk = false;
     try {
-      audioPath = await downloadAudioWithYtDlp(url);
+      audioPath = await downloadAudioViaCobalt(url);
+      cobaltOk = true;
+    } catch (cobaltErr) {
+      console.log('[transcribe] cobalt failed:', cobaltErr.message, '— trying yt-dlp');
+    }
+
+    // 3. Fallback: yt-dlp (if cobalt fails and yt-dlp is available)
+    if (!cobaltOk) {
+      try {
+        audioPath = await downloadAudioWithYtDlp(url);
+      } catch (ytdlpErr) {
+        return res.json({ ok: false, error: `No se pudo descargar el video. Intenta subir el archivo directamente.\n(${ytdlpErr.message.slice(0, 120)})` });
+      }
+    }
+
+    try {
       transcript = await transcribeWithWhisper(audioPath);
       method = 'whisper';
     } catch (e) {
-      return res.json({ ok: false, error: `No se pudo transcribir el video: ${e.message}` });
+      return res.json({ ok: false, error: 'Error al transcribir con Whisper: ' + e.message });
     } finally {
       if (audioPath && fs.existsSync(audioPath)) {
         try { fs.unlinkSync(audioPath); } catch (_) {}
@@ -5581,14 +5623,12 @@ app.post('/api/transcribe', async (req, res) => {
   }
 
   if (!transcript || transcript.trim().length < 10) {
-    return res.json({ ok: false, error: 'El video no tiene audio o la transcripción está vacía.' });
+    return res.json({ ok: false, error: 'No se detectó audio o el video está vacío.' });
   }
 
-  // 3. Analyze with Claude
+  // 4. Analyze with Claude
   let analysis = null;
-  try {
-    analysis = await analyzeTranscript(transcript);
-  } catch (_) {}
+  try { analysis = await analyzeTranscript(transcript); } catch (_) {}
 
   res.json({ ok: true, transcript, wordCount: transcript.split(/\s+/).length, method, analysis });
 });
