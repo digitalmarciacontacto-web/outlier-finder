@@ -1220,10 +1220,10 @@ app.get('/', async (req, res) => {
   <div class="section-header">
     <h2 class="section-title">🎥 Transcribir video</h2>
   </div>
-  <p class="repurposer-desc">Pega un link de YouTube y obtén el guión completo + análisis de hook y estructura.</p>
+  <p class="repurposer-desc">Pega un link de YouTube, Instagram, TikTok o Facebook y obtén el guión completo + análisis de hook y estructura.</p>
 
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
-    <input id="transcribe-url" type="url" placeholder="https://www.youtube.com/watch?v=..."
+    <input id="transcribe-url" type="url" placeholder="YouTube · Instagram · TikTok · Facebook — pega el link aquí"
       style="flex:1;background:#111827;border:1px solid #2a2a2a;border-radius:8px;color:#e2e8f0;font-size:14px;padding:12px 16px;outline:none;transition:border-color .2s;font-family:inherit;"
       onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#2a2a2a'"
       onkeydown="if(event.key==='Enter')transcribeVideo()"/>
@@ -1738,7 +1738,8 @@ app.get('/', async (req, res) => {
       ).join('');
 
       document.getElementById('transcribe-text').textContent = d.transcript;
-      document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras';
+      const methodLabel = d.method === 'whisper' ? '🎙 Whisper AI' : '📝 Subtítulos YT';
+      document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras · ' + methodLabel;
       result.style.display = 'block';
     } catch (e) {
       loading.style.display = 'none';
@@ -5375,45 +5376,78 @@ app.get('/api/social-outliers/instagram', async (req, res) => {
   }
 });
 
-// ── Transcripción de videos ─────────────────────────────────────────────────
+// ── Transcripción de videos (multi-plataforma) ─────────────────────────────
 const { YoutubeTranscript } = require('youtube-transcript');
+const { execFile } = require('child_process');
+const os = require('os');
+const FormData = require('form-data');
 
 function extractYouTubeId(url) {
   const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
 }
 
-app.post('/api/transcribe', async (req, res) => {
-  const { url } = req.body || {};
-  if (!url) return res.json({ ok: false, error: 'URL requerida.' });
+function isYouTubeUrl(url) {
+  return /youtube\.com|youtu\.be/.test(url);
+}
 
-  const videoId = extractYouTubeId(url);
-  if (!videoId) return res.json({ ok: false, error: 'No se pudo extraer el ID del video de YouTube. Asegúrate de pegar un link válido.' });
+// Run yt-dlp and download audio to a temp file, returns path or throws
+function downloadAudioWithYtDlp(url) {
+  return new Promise((resolve, reject) => {
+    const tmpDir = os.tmpdir();
+    const tmpBase = path.join(tmpDir, `ytdlp_${Date.now()}`);
+    const args = [
+      url,
+      '-x',                        // extract audio only
+      '--audio-format', 'mp3',
+      '--audio-quality', '5',       // medium quality (smaller file)
+      '--no-playlist',
+      '--no-warnings',
+      '-o', tmpBase + '.%(ext)s',
+      '--max-filesize', '50m',      // safety limit
+    ];
+    execFile('yt-dlp', args, { timeout: 90000 }, (err, stdout, stderr) => {
+      if (err) {
+        return reject(new Error(stderr?.slice(0, 300) || err.message));
+      }
+      const outFile = tmpBase + '.mp3';
+      if (!fs.existsSync(outFile)) {
+        // Try to find any file with this base name
+        const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(path.basename(tmpBase)));
+        if (files.length > 0) return resolve(path.join(tmpDir, files[0]));
+        return reject(new Error('No se pudo descargar el audio del video.'));
+      }
+      resolve(outFile);
+    });
+  });
+}
 
-  let rawSegments;
-  try {
-    rawSegments = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
-      .catch(() => YoutubeTranscript.fetchTranscript(videoId)); // fallback to any lang
-  } catch (e) {
-    return res.json({ ok: false, error: 'No se encontraron subtítulos para este video. Prueba con un video que tenga subtítulos automáticos activados.' });
-  }
+// Transcribe audio file via OpenAI Whisper
+async function transcribeWithWhisper(audioPath) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY no configurada.');
+  const form = new FormData();
+  form.append('file', fs.createReadStream(audioPath), path.basename(audioPath));
+  form.append('model', 'whisper-1');
+  form.append('language', 'es');
+  form.append('response_format', 'text');
+  const r = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
+    maxBodyLength: Infinity,
+    timeout: 120000,
+  });
+  return typeof r.data === 'string' ? r.data : r.data.text || '';
+}
 
-  if (!rawSegments || rawSegments.length === 0) {
-    return res.json({ ok: false, error: 'Este video no tiene subtítulos disponibles.' });
-  }
-
-  const transcript = rawSegments.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
-
-  // Ask Claude to analyze the transcript
+// Analyze transcript with Claude
+async function analyzeTranscript(transcript) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  let analysis;
-  try {
-    const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 1500,
-      messages: [{
-        role: 'user',
-        content: `Analiza esta transcripción de un video y extrae lo siguiente en español. Responde SOLO con el formato indicado, sin texto extra.
+  const msg = await anthropic.messages.create({
+    model: 'claude-opus-4-5',
+    max_tokens: 1500,
+    messages: [{
+      role: 'user',
+      content: `Analiza esta transcripción de un video y extrae lo siguiente en español. Responde SOLO con el formato indicado, sin texto extra.
 
 TRANSCRIPCIÓN:
 ${transcript.slice(0, 6000)}
@@ -5431,24 +5465,68 @@ IDEA_CENTRAL:
 CAPTION_SUGERIDO:
 [Caption listo para publicar en Instagram/TikTok basado en este video, máx 150 palabras, con emojis, en primera persona]
 `
-      }]
-    });
-    const text = msg.content[0].text;
-    const get = (key) => {
-      const m = text.match(new RegExp(`${key}:\\n([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`));
-      return m ? m[1].trim() : '';
-    };
-    analysis = {
-      hook: get('HOOK'),
-      estructura: get('ESTRUCTURA'),
-      idea: get('IDEA_CENTRAL'),
-      caption: get('CAPTION_SUGERIDO'),
-    };
-  } catch (e) {
-    analysis = null;
+    }]
+  });
+  const text = msg.content[0].text;
+  const get = (key) => {
+    const m = text.match(new RegExp(`${key}:\\n([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`));
+    return m ? m[1].trim() : '';
+  };
+  return { hook: get('HOOK'), estructura: get('ESTRUCTURA'), idea: get('IDEA_CENTRAL'), caption: get('CAPTION_SUGERIDO') };
+}
+
+app.post('/api/transcribe', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.json({ ok: false, error: 'URL requerida.' });
+
+  let transcript = '';
+  let method = '';
+
+  // 1. YouTube: try captions first (free, instant)
+  if (isYouTubeUrl(url)) {
+    const videoId = extractYouTubeId(url);
+    if (videoId) {
+      try {
+        const segs = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
+          .catch(() => YoutubeTranscript.fetchTranscript(videoId));
+        if (segs && segs.length > 0) {
+          transcript = segs.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+          method = 'youtube-captions';
+        }
+      } catch (_) { /* fall through to yt-dlp */ }
+    }
   }
 
-  res.json({ ok: true, transcript, wordCount: transcript.split(' ').length, analysis });
+  // 2. Any URL (including YT fallback): download audio with yt-dlp + Whisper
+  if (!transcript) {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.json({ ok: false, error: 'Este video requiere transcripción con Whisper. Configura OPENAI_API_KEY en las variables de entorno.' });
+    }
+    let audioPath = null;
+    try {
+      audioPath = await downloadAudioWithYtDlp(url);
+      transcript = await transcribeWithWhisper(audioPath);
+      method = 'whisper';
+    } catch (e) {
+      return res.json({ ok: false, error: `No se pudo transcribir el video: ${e.message}` });
+    } finally {
+      if (audioPath && fs.existsSync(audioPath)) {
+        try { fs.unlinkSync(audioPath); } catch (_) {}
+      }
+    }
+  }
+
+  if (!transcript || transcript.trim().length < 10) {
+    return res.json({ ok: false, error: 'El video no tiene audio o la transcripción está vacía.' });
+  }
+
+  // 3. Analyze with Claude
+  let analysis = null;
+  try {
+    analysis = await analyzeTranscript(transcript);
+  } catch (_) {}
+
+  res.json({ ok: true, transcript, wordCount: transcript.split(/\s+/).length, method, analysis });
 });
 
 function startServer() {
