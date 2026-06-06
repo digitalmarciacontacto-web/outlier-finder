@@ -1809,7 +1809,8 @@ app.get('/', async (req, res) => {
     ).join('');
     document.getElementById('transcribe-text').textContent = d.transcript;
     const methodLabel = d.method === 'whisper' ? '🎙 Whisper AI' : d.method === 'file' ? '📁 Archivo subido' : '📝 Subtítulos YT';
-    document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras · ' + methodLabel;
+    const cacheTag = d.cached ? ' · ⚡ caché' : '';
+    document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras · ' + methodLabel + cacheTag;
     document.getElementById('transcribe-result').style.display = 'block';
   }
 
@@ -5576,9 +5577,41 @@ async function downloadAudioViaCobalt(url) {
   return tmpPath;
 }
 
+// ── Transcript cache (Redis) ─────────────────────────────────────────────────
+function transcriptCacheKey(url) {
+  const hash = crypto.createHash('sha256').update(url.trim().toLowerCase()).digest('hex').slice(0, 16);
+  return `transcript:marcia:${hash}`;
+}
+
+async function getCachedTranscript(url) {
+  try {
+    const { Redis } = require('@upstash/redis');
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
+    const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN });
+    const raw = await redis.get(transcriptCacheKey(url));
+    if (!raw) return null;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (_) { return null; }
+}
+
+async function saveTranscriptCache(url, data) {
+  try {
+    const { Redis } = require('@upstash/redis');
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return;
+    const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN });
+    await redis.set(transcriptCacheKey(url), JSON.stringify({ ...data, cachedAt: new Date().toISOString() }));
+  } catch (_) {}
+}
+
 app.post('/api/transcribe', async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.json({ ok: false, error: 'URL requerida.' });
+
+  // 0. Check cache first — never pay twice for the same video
+  const cached = await getCachedTranscript(url);
+  if (cached) {
+    return res.json({ ...cached, ok: true, cached: true });
+  }
 
   let transcript = '';
   let method = '';
@@ -5640,7 +5673,12 @@ app.post('/api/transcribe', async (req, res) => {
   let analysis = null;
   try { analysis = await analyzeTranscript(transcript); } catch (_) {}
 
-  res.json({ ok: true, transcript, wordCount: transcript.split(/\s+/).length, method, analysis });
+  const result = { transcript, wordCount: transcript.split(/\s+/).length, method, analysis };
+
+  // 5. Save to cache — never transcribe this URL again
+  await saveTranscriptCache(url, result);
+
+  res.json({ ok: true, ...result });
 });
 
 // ── Transcripción por archivo subido ────────────────────────────────────────
