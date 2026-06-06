@@ -5464,26 +5464,20 @@ function downloadAudioWithYtDlp(url) {
     const tmpBase = path.join(tmpDir, `ytdlp_${Date.now()}`);
     const args = [
       url,
-      '-x',                        // extract audio only
-      '--audio-format', 'mp3',
-      '--audio-quality', '5',       // medium quality (smaller file)
+      '-x',                        // extract audio only (native format, no ffmpeg conversion)
       '--no-playlist',
       '--no-warnings',
       '-o', tmpBase + '.%(ext)s',
-      '--max-filesize', '50m',      // safety limit
+      '--max-filesize', '50m',
     ];
     execFile('yt-dlp', args, { timeout: 90000 }, (err, stdout, stderr) => {
       if (err) {
-        return reject(new Error(stderr?.slice(0, 300) || err.message));
+        return reject(new Error(stderr?.slice(0, 200) || err.message));
       }
-      const outFile = tmpBase + '.mp3';
-      if (!fs.existsSync(outFile)) {
-        // Try to find any file with this base name
-        const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(path.basename(tmpBase)));
-        if (files.length > 0) return resolve(path.join(tmpDir, files[0]));
-        return reject(new Error('No se pudo descargar el audio del video.'));
-      }
-      resolve(outFile);
+      // Find whatever file yt-dlp created (m4a, aac, webm, mp4, etc.)
+      const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(path.basename(tmpBase)));
+      if (files.length > 0) return resolve(path.join(tmpDir, files[0]));
+      reject(new Error('yt-dlp no generó ningún archivo de audio.'));
     });
   });
 }
@@ -5570,9 +5564,11 @@ async function downloadAudioViaCobalt(url) {
   const audioUrl = directUrl || picker?.[0]?.url;
   if (!audioUrl) throw new Error('cobalt: no se obtuvo URL de audio');
 
-  // 2. Download audio to temp file
-  const tmpPath = path.join(os.tmpdir(), `cobalt_${Date.now()}.mp3`);
+  // 2. Download audio to temp file (detect extension from content-type)
   const dlRes = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 60000, maxContentLength: 50 * 1024 * 1024 });
+  const contentType = dlRes.headers['content-type'] || '';
+  const ext = contentType.includes('mp4') ? 'mp4' : contentType.includes('webm') ? 'webm' : contentType.includes('ogg') ? 'ogg' : 'mp3';
+  const tmpPath = path.join(os.tmpdir(), `cobalt_${Date.now()}.${ext}`);
   fs.writeFileSync(tmpPath, Buffer.from(dlRes.data));
   return tmpPath;
 }
