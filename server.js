@@ -5496,12 +5496,21 @@ async function transcribeWithWhisper(audioPath) {
   form.append('model', 'whisper-1');
   // No forzar idioma → Whisper auto-detecta (inglés, ruso, árabe, etc.)
   form.append('response_format', 'text');
-  const r = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
-    headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
-    maxBodyLength: Infinity,
-    timeout: 120000,
-  });
-  return typeof r.data === 'string' ? r.data : r.data.text || '';
+  try {
+    const r = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
+      maxBodyLength: Infinity,
+      timeout: 120000,
+    });
+    return typeof r.data === 'string' ? r.data : r.data.text || '';
+  } catch (err) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.error?.message || err.message;
+    if (status === 429) throw new Error('Límite de OpenAI alcanzado. Ve a platform.openai.com/billing y agrega un método de pago (cuesta < $0.01 por reel).');
+    if (status === 401) throw new Error('API key de OpenAI inválida. Verifica la variable OPENAI_API_KEY en Railway.');
+    if (status === 413) throw new Error('El archivo es demasiado grande para Whisper (máx 25 MB).');
+    throw new Error(msg);
+  }
 }
 
 // Analyze transcript with Claude
