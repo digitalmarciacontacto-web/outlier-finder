@@ -915,15 +915,16 @@ app.get('/', async (req, res) => {
       </div>
     </div>
 
-    <!-- Outliers toggle -->
-    <div id="fb-outliers-hint" style="display:none;font-size:11px;color:#6366f1;margin-top:16px;font-weight:600;cursor:pointer;" onclick="toggleFbOutliers()">Ver outliers ▼</div>
 
-    <!-- ── Facebook — posts destacados ── -->
-    <div id="hoy-fb-outliers" style="margin-top:12px;display:none;">
-      <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📘 Facebook — posts destacados</div>
-      <div id="hoy-fb-list"></div>
+  </div>
+
+  <!-- ── Facebook Outliers ── -->
+  <div id="hoy-fb-outliers" style="margin-top:28px;display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;color:#e2e8f0;">📘 Posts destacados — Facebook</div>
+      <div id="hoy-fb-page" style="font-size:12px;color:#6b7280;"></div>
     </div>
-
+    <div id="hoy-fb-list"></div>
   </div>
 
   <!-- ── Qué publicar hoy ── -->
@@ -1962,15 +1963,6 @@ app.get('/', async (req, res) => {
     if (hint) hint.textContent = _ytExpanded ? 'Ocultar videos ▲' : 'Ver videos ▼';
   }
 
-  let _fbOutliersExpanded = false;
-  function toggleFbOutliers() {
-    const wrap = document.getElementById('hoy-fb-outliers');
-    const hint = document.getElementById('fb-outliers-hint');
-    if (!wrap) return;
-    _fbOutliersExpanded = !_fbOutliersExpanded;
-    wrap.style.display = _fbOutliersExpanded ? 'block' : 'none';
-    if (hint) hint.textContent = _fbOutliersExpanded ? 'Ocultar outliers ▲' : 'Ver outliers ▼';
-  }
 
   let canalLoaded = false;
   async function loadCanal() {
@@ -2439,8 +2431,7 @@ app.get('/', async (req, res) => {
       _hide('hoy-canal-loading');
       _show('hoy-canal-cards');
 
-      // Load Facebook outliers in background
-      loadHoyFbOutliers();
+      // (FB outliers load independently below)
 
     } catch (err) {
       const loading = document.getElementById('hoy-canal-loading');
@@ -2449,35 +2440,57 @@ app.get('/', async (req, res) => {
   }
 
   async function loadHoyFbOutliers() {
-    const hint = document.getElementById('fb-outliers-hint');
+    const wrap = document.getElementById('hoy-fb-outliers');
     const list = document.getElementById('hoy-fb-list');
-    if (!list) return;
+    const pageEl = document.getElementById('hoy-fb-page');
+    if (!wrap || !list) return;
+    // Show section with loading state
+    wrap.style.display = 'block';
+    list.innerHTML = '<div style="color:#6b7280;font-size:13px;padding:8px 0;">Cargando posts...</div>';
     try {
       const r = await fetch('/api/social-outliers/facebook');
       const d = await r.json();
-      if (!d.ok || d.code === 'NEED_RECONNECT' || d.code === 'NO_TOKEN') return;
-      // Server already scores & sorts posts by engagement ratio; just take top 5
-      const posts = (d.posts || []).slice(0, 5);
-      if (!posts.length) return;
+      if (d.code === 'NO_TOKEN') {
+        wrap.style.display = 'none';
+        return;
+      }
+      if (d.code === 'NEED_RECONNECT' || !d.ok) {
+        list.innerHTML = \`<div style="font-size:13px;color:#f87171;padding:8px 0;">
+          ⚠️ Token de Meta expirado.
+          <button onclick="connectMeta()" style="margin-left:10px;background:#1877f2;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;">Reconectar Meta</button>
+        </div>\`;
+        return;
+      }
+      const posts = (d.posts || []).slice(0, 8);
+      if (!posts.length) {
+        list.innerHTML = '<div style="color:#6b7280;font-size:13px;padding:8px 0;">No se encontraron posts publicados en tu página.</div>';
+        return;
+      }
+      if (pageEl && d.page) pageEl.textContent = d.page;
       list.innerHTML = posts.map(x => {
         const scoreLabel = x.score > 0 ? x.score.toFixed(1) + 'x' : '—';
         const scoreColor = x.score >= 2 ? '#10b981' : x.score >= 1.3 ? '#a78bfa' : '#6b7280';
         const raw = x.text || '';
-        const text = raw.length > 130 ? raw.slice(0, 130) + '…' : raw;
+        const text = raw.length > 140 ? raw.slice(0, 140) + '…' : (raw || '(post sin texto)');
         const link = x.url || '';
-        return \`<div style="padding:10px 0;border-bottom:1px solid #1e293b;display:flex;gap:12px;align-items:flex-start;">
-          <span style="color:\${scoreColor};font-weight:700;font-size:12px;white-space:nowrap;min-width:28px;">\${scoreLabel}</span>
-          <span style="font-size:13px;color:#cbd5e1;line-height:1.4;flex:1;">\${text || '(sin texto)'}</span>
-          \${link ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;">↗</a>\` : ''}
+        const eng = x.likes || x.engagement ? \`❤️ \${x.likes || 0}  💬 \${x.comments || 0}  🔁 \${x.shares || 0}\` : '';
+        return \`<div style="padding:12px 0;border-bottom:1px solid #1e293b;display:flex;gap:12px;align-items:flex-start;">
+          <span style="color:\${scoreColor};font-weight:700;font-size:13px;white-space:nowrap;min-width:32px;margin-top:2px;">\${scoreLabel}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;color:#cbd5e1;line-height:1.5;">\${text}</div>
+            \${eng ? \`<div style="font-size:11px;color:#4b5563;margin-top:5px;">\${eng}</div>\` : ''}
+          </div>
+          \${link ? \`<a href="\${link}" target="_blank" rel="noopener" style="color:#6366f1;font-size:12px;flex-shrink:0;margin-top:2px;">↗</a>\` : ''}
         </div>\`;
       }).join('');
-      // Show toggle button now that we have data
-      if (hint) hint.style.display = 'block';
-    } catch (_) { /* silently ignore */ }
+    } catch (e) {
+      list.innerHTML = '<div style="color:#6b7280;font-size:13px;padding:8px 0;">No se pudieron cargar los posts.</div>';
+    }
   }
 
   // Auto-load on first render (section-hoy is active by default)
   loadHoyCanal();
+  loadHoyFbOutliers();
 
   async function loadHoyPublicado() {
     try {
