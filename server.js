@@ -799,6 +799,7 @@ app.get('/', async (req, res) => {
   </div>
   <nav class="header-nav">
     <button class="nav-tab active" data-section="hoy" onclick="showSection('hoy')">Hoy</button>
+    <button class="nav-tab" data-section="outliers" onclick="showSection('outliers')">📊 Outliers</button>
     <button class="nav-tab" data-section="crear" onclick="showSection('crear')">🔖 Hooks</button>
     <button class="nav-tab" data-section="metas" onclick="showSection('metas')">Metas</button>
     <button class="nav-tab" data-section="repurposer" onclick="showSection('repurposer')">Repurposer</button>
@@ -2454,9 +2455,10 @@ app.get('/', async (req, res) => {
         wrap.style.display = 'none';
         return;
       }
-      if (d.code === 'NEED_RECONNECT' || !d.ok) {
+      if (!d.ok) {
+        const isExpired = d.code === 'NEED_RECONNECT';
         list.innerHTML = \`<div style="font-size:13px;color:#f87171;padding:8px 0;">
-          ⚠️ Token de Meta expirado.
+          ⚠️ \${isExpired ? 'El token de Meta necesita actualizarse.' : 'Error al cargar posts: ' + (d.error || 'Error desconocido')}.
           <button onclick="connectMeta()" style="margin-left:10px;background:#1877f2;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;">Reconectar Meta</button>
         </div>\`;
         return;
@@ -5265,31 +5267,46 @@ app.get('/api/social-outliers/facebook', async (req, res) => {
     if (!page) return res.json({ ok: false, code: 'NO_PAGE', posts: [] });
     const pageToken = page.access_token || metaToken;
 
-    // Fetch posts — use reactions (modern) + comments. If that fails, fallback to posts without engagement.
+    // Try fetching posts — three levels of fallback for permissions
     let rawPosts = [];
     let hasEngagement = true;
+
+    // Level 1: full engagement fields
     try {
       const postsRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/feed`, {
         params: {
           fields: 'id,message,story,created_time,permalink_url,reactions.summary(true),comments.summary(true),shares',
-          limit: 30,
-          access_token: pageToken,
+          limit: 30, access_token: pageToken,
         },
       });
       rawPosts = postsRes.data.data || [];
     } catch (engErr) {
       const errCode = engErr.response?.data?.error?.code;
-      // If permission error, try without engagement fields
-      if (errCode === 10 || errCode === 200) {
+      console.log('[FB outliers] Level 1 failed, code:', errCode, engErr.response?.data?.error?.message);
+      // Level 2: basic post fields only
+      try {
         hasEngagement = false;
         const fallbackRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/feed`, {
           params: { fields: 'id,message,story,created_time,permalink_url', limit: 30, access_token: pageToken },
         });
         rawPosts = fallbackRes.data.data || [];
-      } else {
-        const errMsg = engErr.response?.data?.error?.message || engErr.message;
-        const isPermErr = errCode === 10 || /permission/i.test(errMsg);
-        return res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
+      } catch (fb2Err) {
+        const fb2Code = fb2Err.response?.data?.error?.code;
+        console.log('[FB outliers] Level 2 failed, code:', fb2Code, fb2Err.response?.data?.error?.message);
+        // Level 3: published_posts endpoint
+        try {
+          const fb3Res = await axios.get(`https://graph.facebook.com/v19.0/${page.id}/published_posts`, {
+            params: { fields: 'id,message,created_time,permalink_url', limit: 20, access_token: pageToken },
+          });
+          rawPosts = fb3Res.data.data || [];
+        } catch (fb3Err) {
+          const fb3Code = fb3Err.response?.data?.error?.code;
+          const fb3Msg = fb3Err.response?.data?.error?.message || fb3Err.message;
+          console.log('[FB outliers] All levels failed, code:', fb3Code, fb3Msg);
+          // If token is expired (code 190), mark as need reconnect
+          const needsReconnect = [190, 102, 10, 200].includes(fb3Code) || /session|expired|token|permission/i.test(fb3Msg);
+          return res.json({ ok: false, code: needsReconnect ? 'NEED_RECONNECT' : 'ERROR', error: fb3Msg, posts: [] });
+        }
       }
     }
 
@@ -5307,8 +5324,9 @@ app.get('/api/social-outliers/facebook', async (req, res) => {
   } catch (err) {
     const errMsg = err.response?.data?.error?.message || err.message;
     const errCode = err.response?.data?.error?.code;
-    const isPermErr = errCode === 10 || errCode === 200 || /permission/i.test(errMsg);
-    res.json({ ok: false, code: isPermErr ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
+    console.log('[FB outliers] Outer catch, code:', errCode, errMsg);
+    const needsReconnect = [190, 102, 10, 200].includes(errCode) || /session|expired|token|permission/i.test(errMsg);
+    res.json({ ok: false, code: needsReconnect ? 'NEED_RECONNECT' : 'ERROR', error: errMsg, posts: [] });
   }
 });
 
