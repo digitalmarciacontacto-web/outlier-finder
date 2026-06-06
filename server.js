@@ -1220,19 +1220,30 @@ app.get('/', async (req, res) => {
   <div class="section-header">
     <h2 class="section-title">🎥 Transcribir video</h2>
   </div>
-  <p class="repurposer-desc">Pega un link de YouTube, Instagram, TikTok o Facebook y obtén el guión completo + análisis de hook y estructura.</p>
+  <p class="repurposer-desc">Pega un link de YouTube, TikTok o Facebook — o sube el archivo de video directamente si Instagram bloquea el link.</p>
 
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
-    <input id="transcribe-url" type="url" placeholder="YouTube · Instagram · TikTok · Facebook — pega el link aquí"
+  <!-- URL input row -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+    <input id="transcribe-url" type="url" placeholder="https://... (YouTube · TikTok · Facebook)"
       style="flex:1;background:#111827;border:1px solid #2a2a2a;border-radius:8px;color:#e2e8f0;font-size:14px;padding:12px 16px;outline:none;transition:border-color .2s;font-family:inherit;"
       onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#2a2a2a'"
       onkeydown="if(event.key==='Enter')transcribeVideo()"/>
     <button class="btn-repurpose" style="white-space:nowrap;margin:0;" onclick="transcribeVideo()">⬇ Obtener guión</button>
   </div>
 
+  <!-- File upload row (for Instagram reels, etc.) -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+    <label style="display:flex;align-items:center;gap:8px;background:#1e293b;border:1px dashed #334155;border-radius:8px;padding:10px 16px;cursor:pointer;font-size:13px;color:#9898b0;transition:border-color .2s;" onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='#334155'">
+      <span>📁</span>
+      <span id="transcribe-file-label">Subir video o audio (IG, MP4, MP3…)</span>
+      <input id="transcribe-file" type="file" accept="video/*,audio/*,.mp4,.mp3,.mov,.m4a,.webm" style="display:none;" onchange="onTranscribeFileSelected(this)"/>
+    </label>
+    <button id="transcribe-file-btn" class="btn-repurpose" style="white-space:nowrap;margin:0;display:none;" onclick="transcribeFile()">🎙 Transcribir archivo</button>
+  </div>
+
   <div id="transcribe-loading" style="display:none;gap:10px;align-items:center;padding:14px 0;color:#9898b0;font-size:14px;">
     <div class="spinner" style="border-top-color:#6366f1;width:18px;height:18px;border-width:2px;flex-shrink:0;"></div>
-    <span>Extrayendo y analizando el video con Claude...</span>
+    <span id="transcribe-loading-msg">Extrayendo y analizando el video con Claude...</span>
   </div>
 
   <div id="transcribe-result" style="display:none;">
@@ -1704,48 +1715,101 @@ app.get('/', async (req, res) => {
 
   async function transcribeVideo() {
     const url = document.getElementById('transcribe-url').value.trim();
-    if (!url) { alert('Pega una URL de YouTube primero.'); return; }
-    const loading = document.getElementById('transcribe-loading');
-    const result  = document.getElementById('transcribe-result');
-    const errEl   = document.getElementById('transcribe-error');
-    loading.style.display = 'flex';
-    result.style.display  = 'none';
-    errEl.style.display   = 'none';
+    if (!url) { alert('Pega una URL primero.'); return; }
+    _showTranscribeLoading('Descargando y transcribiendo el video...');
     try {
       const r = await fetch('/api/transcribe', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
       const d = await r.json();
-      loading.style.display = 'none';
-      if (!d.ok) { errEl.textContent = '❌ ' + d.error; errEl.style.display = 'block'; return; }
-      _lastTranscript = d.transcript || '';
-      _lastCaption    = d.analysis?.caption || '';
-
-      // Render analysis cards
-      const a = d.analysis || {};
-      const cards = [
-        { label: '🪝 Hook de apertura', content: a.hook, color: '#a78bfa' },
-        { label: '💡 Idea central',     content: a.idea, color: '#34d399' },
-        { label: '📐 Estructura',       content: a.estructura, color: '#60a5fa' },
-        { label: '📱 Caption sugerido', content: a.caption, color: '#f472b6' },
-      ];
-      document.getElementById('transcribe-analysis').innerHTML = cards.map(c =>
-        c.content ? \`<div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;">
-          <div style="font-size:11px;font-weight:700;color:\${c.color};text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">\${c.label}</div>
-          <div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">\${c.content}</div>
-        </div>\` : ''
-      ).join('');
-
-      document.getElementById('transcribe-text').textContent = d.transcript;
-      const methodLabel = d.method === 'whisper' ? '🎙 Whisper AI' : '📝 Subtítulos YT';
-      document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras · ' + methodLabel;
-      result.style.display = 'block';
+      _hideTranscribeLoading();
+      if (!d.ok) { _showTranscribeError(d.error); return; }
+      _renderTranscribeResult(d);
     } catch (e) {
-      loading.style.display = 'none';
-      errEl.textContent = '❌ Error de conexión. Intenta de nuevo.';
-      errEl.style.display = 'block';
+      _hideTranscribeLoading();
+      _showTranscribeError('Error de conexión. Intenta de nuevo.');
     }
+  }
+
+  function onTranscribeFileSelected(input) {
+    const file = input.files[0];
+    const label = document.getElementById('transcribe-file-label');
+    const btn   = document.getElementById('transcribe-file-btn');
+    if (file) {
+      label.textContent = '📁 ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+      btn.style.display = 'block';
+    } else {
+      label.textContent = 'Subir video o audio (IG, MP4, MP3…)';
+      btn.style.display = 'none';
+    }
+  }
+
+  async function transcribeFile() {
+    const input = document.getElementById('transcribe-file');
+    const file  = input.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert('El archivo es demasiado grande. Whisper acepta hasta 25 MB. Prueba exportar solo el audio (MP3).');
+      return;
+    }
+    _showTranscribeLoading('Subiendo archivo y transcribiendo con Whisper... (puede tardar 1-2 min)');
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const r = await fetch('/api/transcribe-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, filename: file.name, mimeType: file.type }),
+      });
+      const d = await r.json();
+      _hideTranscribeLoading();
+      if (!d.ok) { _showTranscribeError(d.error); return; }
+      _renderTranscribeResult(d);
+    } catch (e) {
+      _hideTranscribeLoading();
+      _showTranscribeError('Error al subir el archivo. Intenta de nuevo.');
+    }
+  }
+
+  function _showTranscribeLoading(msg) {
+    document.getElementById('transcribe-loading-msg').textContent = msg || 'Procesando...';
+    document.getElementById('transcribe-loading').style.display = 'flex';
+    document.getElementById('transcribe-result').style.display  = 'none';
+    document.getElementById('transcribe-error').style.display   = 'none';
+  }
+  function _hideTranscribeLoading() {
+    document.getElementById('transcribe-loading').style.display = 'none';
+  }
+  function _showTranscribeError(msg) {
+    const el = document.getElementById('transcribe-error');
+    el.textContent = '❌ ' + msg;
+    el.style.display = 'block';
+  }
+  function _renderTranscribeResult(d) {
+    _lastTranscript = d.transcript || '';
+    _lastCaption    = d.analysis?.caption || '';
+    const a = d.analysis || {};
+    const cards = [
+      { label: '🪝 Hook de apertura', content: a.hook,      color: '#a78bfa' },
+      { label: '💡 Idea central',     content: a.idea,      color: '#34d399' },
+      { label: '📐 Estructura',       content: a.estructura, color: '#60a5fa' },
+      { label: '📱 Caption sugerido', content: a.caption,   color: '#f472b6' },
+    ];
+    document.getElementById('transcribe-analysis').innerHTML = cards.map(c =>
+      c.content ? \`<div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;">
+        <div style="font-size:11px;font-weight:700;color:\${c.color};text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">\${c.label}</div>
+        <div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">\${c.content}</div>
+      </div>\` : ''
+    ).join('');
+    document.getElementById('transcribe-text').textContent = d.transcript;
+    const methodLabel = d.method === 'whisper' ? '🎙 Whisper AI' : d.method === 'file' ? '📁 Archivo subido' : '📝 Subtítulos YT';
+    document.getElementById('transcribe-wordcount').textContent = d.wordCount + ' palabras · ' + methodLabel;
+    document.getElementById('transcribe-result').style.display = 'block';
   }
 
   function usarTranscripcion() {
@@ -5527,6 +5591,39 @@ app.post('/api/transcribe', async (req, res) => {
   } catch (_) {}
 
   res.json({ ok: true, transcript, wordCount: transcript.split(/\s+/).length, method, analysis });
+});
+
+// ── Transcripción por archivo subido ────────────────────────────────────────
+app.post('/api/transcribe-file', async (req, res) => {
+  const { base64, filename, mimeType } = req.body || {};
+  if (!base64 || !filename) return res.json({ ok: false, error: 'Archivo requerido.' });
+  if (!process.env.OPENAI_API_KEY) return res.json({ ok: false, error: 'OPENAI_API_KEY no configurada.' });
+
+  // Write base64 to temp file
+  const tmpPath = path.join(os.tmpdir(), `upload_${Date.now()}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+  try {
+    fs.writeFileSync(tmpPath, Buffer.from(base64, 'base64'));
+  } catch (e) {
+    return res.json({ ok: false, error: 'No se pudo guardar el archivo temporalmente.' });
+  }
+
+  let transcript = '';
+  try {
+    transcript = await transcribeWithWhisper(tmpPath);
+  } catch (e) {
+    return res.json({ ok: false, error: 'Error al transcribir: ' + e.message });
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
+
+  if (!transcript || transcript.trim().length < 10) {
+    return res.json({ ok: false, error: 'No se detectó audio en el archivo.' });
+  }
+
+  let analysis = null;
+  try { analysis = await analyzeTranscript(transcript); } catch (_) {}
+
+  res.json({ ok: true, transcript, wordCount: transcript.split(/\s+/).length, method: 'file', analysis });
 });
 
 function startServer() {
