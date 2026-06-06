@@ -1276,7 +1276,12 @@ app.get('/', async (req, res) => {
     <h2 class="section-title">♻️ Repurposer</h2>
   </div>
   <p class="repurposer-desc">Convierte un guion o idea en 6 posts para Threads, Facebook y Pinterest.</p>
-  <textarea id="repurpose-input" class="repurposer-textarea" placeholder="Pega aquí el guion completo o el título del video que quieres convertir en posts..."></textarea>
+  <div id="repurpose-mode-badge" style="display:none;align-items:center;gap:8px;margin-bottom:10px;background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 14px;">
+    <span style="font-size:18px;">🎬</span>
+    <span style="font-size:13px;color:#a78bfa;font-weight:600;">Modo inspiración</span>
+    <span style="font-size:12px;color:#6b7280;">— Claude usará tus historias propias, no el video</span>
+  </div>
+  <textarea id="repurpose-input" class="repurposer-textarea" placeholder="Pega aquí el guion completo o el título del video que quieres convertir en posts..." oninput="if(this.value && _repurposeMode==='inspiration'){_repurposeMode='mine';const b=document.getElementById('repurpose-mode-badge');if(b)b.style.display='none';}"></textarea>
   <br/>
   <button class="btn-repurpose" onclick="generatePosts()">⚡ Generar 6 posts</button>
   <div class="posts-loading" id="posts-loading">
@@ -1713,6 +1718,8 @@ app.get('/', async (req, res) => {
   // ── Transcripción ────────────────────────────────────────────────────────────
   let _lastTranscript = '';
   let _lastCaption = '';
+  let _lastAnalysis = {};
+  let _repurposeMode = 'mine'; // 'mine' | 'inspiration'
 
   async function transcribeVideo() {
     const url = document.getElementById('transcribe-url').value.trim();
@@ -1794,6 +1801,7 @@ app.get('/', async (req, res) => {
   function _renderTranscribeResult(d) {
     _lastTranscript = d.transcript || '';
     _lastCaption    = d.analysis?.caption || '';
+    _lastAnalysis   = d.analysis || {};
     const a = d.analysis || {};
     const cards = [
       { label: '🪝 Hook de apertura', content: a.hook,      color: '#a78bfa' },
@@ -1816,8 +1824,20 @@ app.get('/', async (req, res) => {
 
   function usarTranscripcion() {
     if (!_lastTranscript) return;
-    document.getElementById('repurpose-input').value = _lastTranscript.slice(0, 4000);
-    // scroll to repurpose section
+    _repurposeMode = 'inspiration';
+    // Show only the analysis summary in the textarea (not the raw transcript)
+    const hook = _lastAnalysis.hook || '';
+    const idea = _lastAnalysis.idea || '';
+    const estructura = _lastAnalysis.estructura || '';
+    const summary = [
+      hook ? '🪝 Hook: ' + hook : '',
+      idea ? '💡 Idea central: ' + idea : '',
+      estructura ? '📐 Estructura: ' + estructura : '',
+    ].filter(Boolean).join('\n\n');
+    document.getElementById('repurpose-input').value = summary || _lastTranscript.slice(0, 800);
+    // Show mode indicator
+    const modeEl = document.getElementById('repurpose-mode-badge');
+    if (modeEl) { modeEl.style.display = 'inline-flex'; }
     document.getElementById('repurpose-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
@@ -1845,8 +1865,15 @@ app.get('/', async (req, res) => {
     try {
       const res = await fetch('/generate-posts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: input }),
+        body: JSON.stringify({
+          content: input,
+          mode: _repurposeMode,
+          transcriptFull: _repurposeMode === 'inspiration' ? _lastTranscript.slice(0, 5000) : '',
+          analysis: _repurposeMode === 'inspiration' ? _lastAnalysis : {},
+        }),
       });
+      // Reset mode after use so manual edits don't inherit it
+      _repurposeMode = 'mine';
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
       loading.style.display = 'none';
@@ -3860,13 +3887,54 @@ El guion debe estar formateado listo para teleprompter, con los timestamps de ca
 
 // ── POST /generate-posts ───────────────────────────────────────────────────────
 app.post('/generate-posts', async (req, res) => {
-  const { content } = req.body;
+  const { content, mode, transcriptFull, analysis } = req.body;
   if (!content) return res.status(400).json({ error: 'Falta el contenido.' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada.' });
 
-  const prompt = `Basándote en este contenido:
+  let prompt;
+
+  if (mode === 'inspiration' && transcriptFull) {
+    // Video de otro creador → extraer ángulo, escribir desde las historias de Marcia
+    prompt = `Estás ayudando a Marcia a crear posts a partir de un video viral de INSPIRACIÓN. Este video NO es de Marcia — es de otro creador. Tu trabajo es:
+
+1. Identificar el ÁNGULO/TEMA central del video (qué problema o insight toca)
+2. Ignorar completamente la historia de ese creador
+3. Escribir posts 100% desde la perspectiva de Marcia, usando SUS propias historias del banco de historias
+
+ANÁLISIS DEL VIDEO VIRAL:
+Hook: ${(analysis?.hook || '').slice(0, 300)}
+Idea central: ${(analysis?.idea || '').slice(0, 300)}
+Estructura: ${(analysis?.estructura || '').slice(0, 300)}
+
+TRANSCRIPT COMPLETO (solo para entender el tema, NO para parafrasear):
+---
+${(transcriptFull || '').slice(0, 4000)}
+---
+
+INSTRUCCIÓN CRÍTICA: Los posts NO deben mencionar el video ni su creador. Deben sonar como si Marcia estuviera contando su propia experiencia con ese tema. Si el video habla de libertad financiera, Marcia escribe sobre SU experiencia con dinero y trabajo remoto. Si habla de redes sociales, Marcia escribe sobre SU proceso de creación de contenido. Usa el tema como inspiración, no el contenido.
+
+Genera exactamente 2 sets de posts con la voz de Marcia:
+- 1 post para Threads (máximo 500 caracteres, conversacional, sin emojis, sin bullets de IA)
+- 1 post para Facebook (máximo 400 palabras, personal, narrativo, como carta a una amiga)
+- 1 idea de pin para Pinterest (título SEO conciso + descripción de ~100 palabras orientada a búsqueda, sin emojis)
+
+Set 1: El insight inesperado del tema + historia personal concreta de Marcia
+Set 2: El consejo accionable desde la experiencia de Marcia + pregunta que genera reflexión
+
+Reglas de voz: sin emojis, sin bullets de IA, sin frases de lifestyle vacías, todo en primera persona y tono real.
+
+Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto antes ni después:
+{
+  "posts": [
+    { "threads": "texto para threads", "facebook": "texto para facebook", "pinterest_title": "Título SEO", "pinterest_desc": "descripción de 100 palabras" },
+    { "threads": "texto para threads", "facebook": "texto para facebook", "pinterest_title": "Título SEO", "pinterest_desc": "descripción de 100 palabras" }
+  ]
+}`;
+  } else {
+    // Guion propio de Marcia → adaptar directamente
+    prompt = `Basándote en este guion/idea de Marcia:
 ---
 ${content.slice(0, 4000)}
 ---
@@ -3889,6 +3957,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
     { "threads": "texto para threads", "facebook": "texto para facebook", "pinterest_title": "Título SEO", "pinterest_desc": "descripción de 100 palabras" }
   ]
 }`;
+  }
 
   try {
     const client = new Anthropic({ apiKey });
