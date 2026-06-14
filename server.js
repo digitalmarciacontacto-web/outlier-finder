@@ -2424,7 +2424,10 @@ app.get('/', async (req, res) => {
   async function loadHoyCanal() {
     if (_hoyCanalLoaded) return;
     try {
-      const r = await fetch('/my-channel');
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch('/my-channel', { signal: ctrl.signal });
+      clearTimeout(timer);
       const d = await r.json();
       if (d.error) throw new Error(d.error);
       _hoyCanalLoaded = true;
@@ -2530,7 +2533,9 @@ app.get('/', async (req, res) => {
 
     } catch (err) {
       const loading = document.getElementById('hoy-canal-loading');
-      if (loading) loading.innerHTML = \`<span style="color:#6b7280;font-size:13px;">No se pudo cargar el canal: \${err.message}</span>\`;
+      const isAbort = err.name === 'AbortError';
+      const msg = isAbort ? 'La carga tardó demasiado. Recarga la página.' : (err.message || 'Error desconocido');
+      if (loading) loading.innerHTML = \`<div style="background:#1a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:14px 18px;font-size:13px;color:#fca5a5;line-height:1.5;">\${msg}</div>\`;
     }
   }
 
@@ -4264,100 +4269,140 @@ app.get('/usage', async (req, res) => {
 });
 
 // ── GET /my-channel ───────────────────────────────────────────────────────────
+const MY_CHANNEL_CACHE_KEY = 'my-channel:yt:cache';
+const MY_CHANNEL_CACHE_TTL = 7200; // 2 hours in seconds
+
+let _redisClient = null;
+function getRedisClient() {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
+  if (!_redisClient) {
+    const { Redis } = require('@upstash/redis');
+    _redisClient = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN });
+  }
+  return _redisClient;
+}
+
 app.get('/my-channel', async (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'YOUTUBE_API_KEY no configurada.' });
 
+  const AX = { timeout: 10000 }; // 10-second timeout on every API call
+
+  // ── YouTube data: try Redis cache first ──
+  let ytData = null;
   try {
-    // 1. Resolve @marcia.nomada handle → channelId + basic stats
-    const chRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
-      params: { part: 'id,snippet,statistics', forHandle: 'marcia.nomada', key: apiKey },
-    });
-    const channel = chRes.data.items && chRes.data.items[0];
-    if (!channel) return res.status(404).json({ error: 'Canal @marcia.nomada no encontrado.' });
+    const redis = getRedisClient();
+    if (redis) {
+      const cached = await redis.get(MY_CHANNEL_CACHE_KEY);
+      if (cached) ytData = typeof cached === 'string' ? JSON.parse(cached) : cached;
+    }
+  } catch (_) {}
 
-    const channelId = channel.id;
-    const stats = channel.statistics;
-    const subscribers = parseInt(stats.subscriberCount || 0, 10);
-    const totalViews = parseInt(stats.viewCount || 0, 10);
-    const videoCount = parseInt(stats.videoCount || 0, 10);
-    const avgViews = videoCount > 0 ? Math.round(totalViews / videoCount) : 0;
-
-    // 2. Fetch the 5 most recent videos (IDs)
-    const searchRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-      params: { part: 'snippet', channelId, order: 'date', maxResults: 5, type: 'video', key: apiKey },
-    });
-    const searchItems = searchRes.data.items || [];
-    const recentIds = searchItems.map(i => i.id.videoId).join(',');
-
-    // 3. Fetch video stats for recent videos
-    let recentVideos = [];
-    if (recentIds) {
-      const vRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-        params: { part: 'snippet,statistics', id: recentIds, key: apiKey },
+  if (!ytData) {
+    try {
+      // 1. Channel stats (1 unit)
+      const chRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+        params: { part: 'id,snippet,statistics', forHandle: 'marcia.nomada', key: apiKey }, ...AX,
       });
-      recentVideos = (vRes.data.items || []).map(v => ({
-        id: v.id,
-        title: v.snippet.title,
-        publishedAt: v.snippet.publishedAt,
+      const channel = chRes.data.items && chRes.data.items[0];
+      if (!channel) return res.status(404).json({ error: 'Canal @marcia.nomada no encontrado.' });
+
+      const channelId = channel.id;
+      const stats = channel.statistics;
+      const subscribers = parseInt(stats.subscriberCount || 0, 10);
+      const totalViews = parseInt(stats.viewCount || 0, 10);
+      const videoCount = parseInt(stats.videoCount || 0, 10);
+      const avgViews = videoCount > 0 ? Math.round(totalViews / videoCount) : 0;
+
+      // 2+4. Recent + top videos — fetch both search results in parallel (100 units each)
+      const [searchRes, topRes] = await Promise.all([
+        axios.get('https://www.googleapis.com/youtube/v3/search', {
+          params: { part: 'snippet', channelId, order: 'date', maxResults: 5, type: 'video', key: apiKey }, ...AX,
+        }),
+        axios.get('https://www.googleapis.com/youtube/v3/search', {
+          params: { part: 'snippet', channelId, order: 'viewCount', maxResults: 1, type: 'video', key: apiKey }, ...AX,
+        }),
+      ]);
+
+      const searchItems = searchRes.data.items || [];
+      const recentIds = searchItems.map(i => i.id.videoId).filter(Boolean).join(',');
+      const topItem = topRes.data.items && topRes.data.items[0];
+
+      // 3+5. Video details in parallel (1 unit each)
+      const [vRes, topVRes] = await Promise.all([
+        recentIds ? axios.get('https://www.googleapis.com/youtube/v3/videos', {
+          params: { part: 'snippet,statistics', id: recentIds, key: apiKey }, ...AX,
+        }) : Promise.resolve({ data: { items: [] } }),
+        topItem ? axios.get('https://www.googleapis.com/youtube/v3/videos', {
+          params: { part: 'snippet,statistics', id: topItem.id.videoId, key: apiKey }, ...AX,
+        }) : Promise.resolve({ data: { items: [] } }),
+      ]);
+
+      const recentVideos = (vRes.data.items || []).map(v => ({
+        id: v.id, title: v.snippet.title, publishedAt: v.snippet.publishedAt,
         thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || '',
         views: parseInt(v.statistics.viewCount || 0, 10),
         likes: parseInt(v.statistics.likeCount || 0, 10),
         url: `https://www.youtube.com/watch?v=${v.id}`,
       }));
-    }
 
-    // 4. Fetch top video by views (search by viewCount order)
-    const topRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-      params: { part: 'snippet', channelId, order: 'viewCount', maxResults: 1, type: 'video', key: apiKey },
-    });
-    const topItem = topRes.data.items && topRes.data.items[0];
-    let topVideo = null;
-    if (topItem) {
-      const topVRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-        params: { part: 'snippet,statistics', id: topItem.id.videoId, key: apiKey },
-      });
       const tv = topVRes.data.items && topVRes.data.items[0];
-      if (tv) {
-        topVideo = {
-          id: tv.id,
-          title: tv.snippet.title,
-          publishedAt: tv.snippet.publishedAt,
-          thumbnail: tv.snippet.thumbnails?.medium?.url || tv.snippet.thumbnails?.default?.url || '',
-          views: parseInt(tv.statistics.viewCount || 0, 10),
-          likes: parseInt(tv.statistics.likeCount || 0, 10),
-          url: `https://www.youtube.com/watch?v=${tv.id}`,
-        };
-      }
+      const topVideo = tv ? {
+        id: tv.id, title: tv.snippet.title, publishedAt: tv.snippet.publishedAt,
+        thumbnail: tv.snippet.thumbnails?.medium?.url || tv.snippet.thumbnails?.default?.url || '',
+        views: parseInt(tv.statistics.viewCount || 0, 10),
+        likes: parseInt(tv.statistics.likeCount || 0, 10),
+        url: `https://www.youtube.com/watch?v=${tv.id}`,
+      } : null;
+
+      ytData = { subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo };
+
+      // Save to Redis cache
+      try {
+        const redis = getRedisClient();
+        if (redis) await redis.set(MY_CHANNEL_CACHE_KEY, JSON.stringify(ytData), { ex: MY_CHANNEL_CACHE_TTL });
+      } catch (_) {}
+
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message;
+      const isQuota = /quota/i.test(msg) || err.response?.status === 403;
+      // If quota exceeded, return a clear error so the UI shows it instead of hanging
+      return res.status(503).json({
+        error: isQuota
+          ? 'Quota de YouTube agotada por hoy. Se restablece a medianoche (hora del Pacífico). Intenta mañana.'
+          : msg,
+      });
     }
+  }
 
-    // 5. Meta (Facebook + Instagram) — only if token is stored
-    let metaConnected = false;
-    let facebookFollowers = null;
-    let instagramFollowers = null;
+  // ── Meta + TikTok in parallel (independent of YT) ──
+  let metaConnected = false, facebookFollowers = null, instagramFollowers = null;
+  let tiktokConnected = false, tiktokFollowers = null;
 
-    const metaToken = await loadMetaToken();
-    if (metaToken) {
+  const [metaToken, ttToken] = await Promise.all([loadMetaToken(), loadTikTokToken()]);
+
+  await Promise.all([
+    // Meta
+    (async () => {
+      if (!metaToken) return;
       metaConnected = true;
       try {
         const pagesRes = await axios.get('https://graph.facebook.com/v19.0/me/accounts', {
-          params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' },
+          params: { access_token: metaToken, fields: 'id,name,access_token,followers_count,fan_count' }, ...AX,
         });
         const pages = pagesRes.data.data || [];
         const page = pages.find(p => /marcia|digital/i.test(p.name)) || pages[0];
         if (page) {
           const pageToken = page.access_token || metaToken;
           const pageRes = await axios.get(`https://graph.facebook.com/v19.0/${page.id}`, {
-            params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken },
+            params: { fields: 'followers_count,fan_count,instagram_business_account', access_token: pageToken }, ...AX,
           });
-          // fan_count is the legacy field; followers_count is newer but may be 0 on some pages
-          const fc = pageRes.data.followers_count;
-          const fanc = pageRes.data.fan_count;
+          const fc = pageRes.data.followers_count, fanc = pageRes.data.fan_count;
           facebookFollowers = (fc != null && fc > 0) ? fc : (fanc != null ? fanc : null);
           const igId = pageRes.data.instagram_business_account?.id;
           if (igId) {
             const igRes = await axios.get(`https://graph.facebook.com/v19.0/${igId}`, {
-              params: { fields: 'followers_count,username', access_token: pageToken },
+              params: { fields: 'followers_count,username', access_token: pageToken }, ...AX,
             });
             instagramFollowers = igRes.data.followers_count ?? null;
           }
@@ -4365,36 +4410,27 @@ app.get('/my-channel', async (req, res) => {
       } catch (metaErr) {
         const detail = metaErr.response?.data?.error?.message || metaErr.message;
         console.error('Meta API error:', detail);
-        // If token is expired/invalid, treat as not connected so the button re-enables
         const code = metaErr.response?.data?.error?.code;
-        if (code === 190 || /expired|invalid/i.test(detail)) {
-          metaConnected = false;
-        }
+        if (code === 190 || /expired|invalid/i.test(detail)) metaConnected = false;
       }
-    }
-
-    // 6. TikTok — only if token is stored
-    let tiktokFollowers = null;
-    let tiktokConnected = false;
-    const ttToken = await loadTikTokToken();
-    if (ttToken) {
+    })(),
+    // TikTok
+    (async () => {
+      if (!ttToken) return;
       tiktokConnected = true;
       try {
         const ttRes = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
           params: { fields: 'follower_count,like_count,video_count' },
-          headers: { Authorization: `Bearer ${ttToken}` },
+          headers: { Authorization: `Bearer ${ttToken}` }, ...AX,
         });
         tiktokFollowers = ttRes.data.data?.user?.follower_count ?? null;
       } catch (ttErr) {
         console.error('TikTok API error:', ttErr.response?.data?.error?.message || ttErr.message);
       }
-    }
+    })(),
+  ]);
 
-    res.json({ subscribers, totalViews, videoCount, avgViews, recentVideos, topVideo, metaConnected, facebookFollowers, instagramFollowers, tiktokConnected, tiktokFollowers });
-  } catch (err) {
-    const msg = err.response?.data?.error?.message || err.message;
-    res.status(500).json({ error: msg });
-  }
+  res.json({ ...ytData, metaConnected, facebookFollowers, instagramFollowers, tiktokConnected, tiktokFollowers });
 });
 
 // ── GET /terms ────────────────────────────────────────────────────────────────
