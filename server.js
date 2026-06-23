@@ -1833,7 +1833,7 @@ app.get('/', async (req, res) => {
       hook ? '🪝 Hook: ' + hook : '',
       idea ? '💡 Idea central: ' + idea : '',
       estructura ? '📐 Estructura: ' + estructura : '',
-    ].filter(Boolean).join('\n\n');
+    ].filter(Boolean).join('\\n\\n');
     document.getElementById('repurpose-input').value = summary || _lastTranscript.slice(0, 800);
     // Show mode indicator
     const modeEl = document.getElementById('repurpose-mode-badge');
